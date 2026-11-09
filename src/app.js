@@ -15,6 +15,7 @@ const ICON = {
   next: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.6c.7 0 1.3.3 1.8.8L12.3 6H18.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>',
   play: '<svg viewBox="0 0 10 10" fill="currentColor"><path d="M1 0.5v9l8-4.5z"/></svg>',
+  feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 9v6l5-3z" fill="currentColor" stroke="none"/></svg>',
   home: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
 };
 
@@ -71,7 +72,21 @@ function toast(msg, ms = 4200) {
 }
 
 // ================================================================ constants & state
-const LS = { links: 'mg.links', view: 'mg.view', scroll: 'mg.scroll', folder: 'mg.folder' };
+const LS = { links: 'mg.links', view: 'mg.view', scroll: 'mg.scroll', folder: 'mg.folder', vcache: 'mg.vcache' };
+
+// ---- Feed mode tunables
+// Videos with a known duration join the feed when longer than FEED_MIN_SECONDS. Files MEGA
+// stored no duration for fall back to a size gate: tune MIN_FEED_VIDEO_BYTES up or down to
+// match how big a ~10 s clip is in your library (placeholder: 5 MB).
+const MIN_FEED_VIDEO_BYTES = 5 * 1024 * 1024;
+const FEED_MIN_SECONDS = 10;
+const FEED_MAX_CARDS = 400;                    // cards per visit (the shuffle picks them)
+const FEED_SKIP_EXT = new Set(['wmv', 'avi', 'mpg', 'mpeg']);
+const FEED_FIRST_CHUNK = 1024 * 1024;          // first upstream range for feed streams (SW hint)
+const FEED_BLOCK = 1024 * 1024;                // must match BLOCK in sw-main.js
+const FEED_TAIL_BYTES = 256 * 1024;            // moov-at-end MP4s: warm the tail too
+const FEED_MAX_PREFETCH = 3;                   // videos buffering at once (focused + queued)
+const VIDEO_CACHE_MAX_BYTES = 500 * 1024 * 1024; // persistent encrypted block cache cap
 const STALE_MS = 60 * 60 * 1000; // re-list a folder in the background when the cached copy is older
 const KIND = { folder: 0, photo: 1, video: 2, other: 3 };
 const TILE_TARGET = { s: 82, m: 118, l: 178 };
@@ -91,6 +106,7 @@ const S = {
   scrollMemo: lsGet(LS.scroll, {}),
   ready: false,
   swReady: false,
+  vcache: { enabled: true, max: VIDEO_CACHE_MAX_BYTES, ...lsGet(LS.vcache, {}) },
 };
 S.view.q = ''; // search is not restored across sessions (it surprises more than it helps)
 
@@ -564,6 +580,7 @@ function thumbEvict() {
   const keep = new Set();
   for (const t of G.live.values()) keep.add(t.h);
   if (LB.r) keep.add(LB.r.h);
+  if (OV.current === 'feed') for (const r of FEED.items) keep.add(r.h);
   for (const [h, u] of TH.map) {
     if (TH.map.size <= TH.MAX * 0.85) break;
     if (keep.has(h)) continue;
@@ -582,6 +599,10 @@ W.on('thumb', (m) => {
       if (t.h === m.id) { t.el.classList.remove('loaded'); t.img.src = u; }
     }
     if (LB.r && LB.r.h === m.id && !$('#lbImg').getAttribute('src')) setLbImage(u, true);
+    if (OV.current === 'feed') {
+      const j = FEED.items.findIndex((r) => r.h === m.id);
+      if (j >= 0) { const img = FEED.cards[j].querySelector('.feed-poster'); if (img && !img.getAttribute('src')) img.src = u; }
+    }
     thumbEvict();
     scheduleStatus();
   } else if (m.none) {
@@ -594,7 +615,7 @@ W.on('thumb', (m) => {
 function requestThumbs() {
   lastWant = performance.now();
   const n = S.items.length;
-  if (!n || OV.current === 'lb' || OV.current === 'player') return;
+  if (!n || OV.current === 'lb' || OV.current === 'player' || OV.current === 'feed') return;
   const y = window.scrollY - G.top;
   const vh = window.innerHeight;
   const v0 = Math.max(0, Math.floor(y / G.rowH) * G.cols);
@@ -796,7 +817,7 @@ function openOverlay(name) {
   document.documentElement.style.overflow = 'hidden';
   history.pushState({ f: S.view.folder, ov: name }, '', location.href);
 }
-function overlayId(name) { return { links: 'sheet', lb: 'lb', player: 'player', info: 'info' }[name]; }
+function overlayId(name) { return { links: 'sheet', lb: 'lb', player: 'player', info: 'info', feed: 'feed' }[name]; }
 function closeOverlay() {
   if (!OV.current) return;
   if (history.state && history.state.ov) history.back(); // popstate closes it
@@ -810,6 +831,7 @@ function closeOverlayNow() {
   document.documentElement.style.overflow = '';
   if (name === 'player') stopVideo();
   if (name === 'lb') closeLightbox();
+  if (name === 'feed') stopFeed();
   if (name === 'links') S.sheetOpen = false;
   requestThumbs();
 }
@@ -829,7 +851,9 @@ function openLinks() {
   openOverlay('links');
   S.sheetOpen = true;
   renderLinks();
-  W.call('cacheStats', {}).then((m) => { $('#cacheInfo').textContent = `${fmtNum(m.thumbs)} thumbnails cached in this browser.`; }).catch(() => {});
+  $('#vcacheOn').checked = S.vcache.enabled;
+  $('#vcacheMax').textContent = fmtBytes(S.vcache.max);
+  refreshCacheInfo();
   if (!S.links.length) setTimeout(() => $('#linkInput').focus(), 50);
 }
 
@@ -923,8 +947,31 @@ $('#linkInput').addEventListener('keydown', (e) => {
 $('#btnRefreshAll').onclick = () => refreshAll();
 $('#btnClearThumbs').onclick = async () => {
   await W.call('clearThumbs', {});
-  $('#cacheInfo').textContent = 'Thumbnail cache cleared.';
+  toast('Thumbnail cache cleared.', 2000);
+  refreshCacheInfo();
 };
+$('#btnClearVideo').onclick = async () => {
+  await W.call('clearBlocks', {});
+  try { navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'cacheClear' }); } catch { /* ignore */ }
+  toast('Video cache cleared.', 2000);
+  refreshCacheInfo();
+};
+$('#vcacheOn').onchange = (e) => {
+  S.vcache.enabled = e.target.checked;
+  lsSet(LS.vcache, S.vcache);
+  applyVideoCacheCfg();
+};
+function refreshCacheInfo() {
+  W.call('cacheStats', {}).then((m) => {
+    $('#cacheInfo').textContent = `${fmtNum(m.thumbs)} thumbnails cached · video cache ${fmtBytes(m.blocks || 0)} of ${fmtBytes(S.vcache.max)}${S.vcache.enabled ? '' : ' (off)'}.`;
+  }).catch(() => {});
+}
+/** Tell the service worker (and its IndexedDB copy) whether/how much to cache. */
+function applyVideoCacheCfg() {
+  const cfg = { id: 'blockCache', enabled: !!S.vcache.enabled, max: S.vcache.max };
+  idbPut('meta', cfg);
+  try { navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'cacheCfg', ...cfg }); } catch { /* ignore */ }
+}
 
 // ---------------------------------------------------------------- item activation
 sizer.addEventListener('click', (e) => {
@@ -967,12 +1014,12 @@ function openInfo(r) {
 }
 
 // ---------------------------------------------------------------- streaming via the service worker
-function streamInfoOf(r) { return { id: r.h, folder: r.L.id, key: r.k, size: r.s, name: r.n, mime: mimeOf(r.n) }; }
+function streamInfoOf(r, firstChunk) { return { id: r.h, folder: r.L.id, key: r.k, size: r.s, name: r.n, mime: mimeOf(r.n), firstChunk: firstChunk || 0 }; }
 function streamUrl(r) { return `__mg/stream/${r.h}/${encodeURIComponent(r.n.replace(/[/\\?#]/g, '_'))}`; }
 function canStream() { return S.swReady && !!navigator.serviceWorker.controller; }
-function registerStream(r) {
-  const info = streamInfoOf(r);
-  try { navigator.serviceWorker.controller.postMessage({ type: 'stream', info }); } catch { /* idb copy suffices */ }
+function registerStream(r, { firstChunk = 0, warmUrl = false } = {}) {
+  const info = streamInfoOf(r, firstChunk);
+  try { navigator.serviceWorker.controller.postMessage({ type: warmUrl ? 'warmUrl' : 'stream', info }); } catch { /* idb copy suffices */ }
   return idbPut('streams', info);
 }
 
@@ -995,6 +1042,7 @@ async function setupServiceWorker() {
     if (m.type !== 'stream-error') return;
     const msg = m.code === -17 ? `MEGA transfer quota reached${m.message.includes('resets') ? ' — ' + m.message.split('(').pop().replace(')', '') : ''}. Try again later.` : m.message;
     if (OV.current === 'player') setMsg('#plMsg', esc(msg));
+    else if (OV.current === 'feed') setMsg('#feedMsg', esc(msg));
     else if (OV.current === 'lb') setMsg('#lbMsg', esc(msg));
     else toast(msg);
   });
@@ -1220,6 +1268,289 @@ vid.addEventListener('error', () => {
 });
 $('#plMsg').addEventListener('click', (e) => { if (e.target.closest('[data-try]') && PL.r) startVideo(PL.r); });
 
+
+// ---------------------------------------------------------------- feed (vertical video feed)
+// Full-screen scroll-snap cards over the current view. Three <video> elements rotate across
+// the cards around the focused one; everything else is a lightweight placeholder with the
+// MEGA thumbnail as a blurred poster. Streams go through the service worker, whose block
+// cache makes revisits instant; queued cards get their head/tail blocks warmed via Range fetches.
+const FEED = {
+  seed: (Math.random() * 0x100000000) >>> 0, // per-session shuffle seed (memory only)
+  visits: 0,
+  items: [], cards: [], vids: [],
+  cur: -1, sound: false, unmuted: false,
+  prefetch: new Map(), // handle -> {ac, tail}
+  settleT: 0, scrubT: 0, scrollY: 0, scrubbing: false,
+  scroller: $('#feedScroll'),
+};
+
+function mulberry32(a) {
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Content gate: duration when MEGA stored one, otherwise the size fallback. */
+function feedEligible(r) {
+  if (r.K !== 2 || r.t || !r.k) return false;
+  if (FEED_SKIP_EXT.has(r.x) || !BROWSER_VIDEO.has(r.x)) return false;
+  if (r.d) return r.d > FEED_MIN_SECONDS;
+  return r.s >= MIN_FEED_VIDEO_BYTES;
+}
+
+function feedList() {
+  const out = S.items.filter(feedEligible);
+  const rnd = mulberry32((FEED.seed ^ Math.imul(FEED.visits, 0x9E3779B9)) >>> 0);
+  for (let i = out.length - 1; i > 0; i--) { // Fisher–Yates
+    const j = Math.floor(rnd() * (i + 1));
+    const t = out[i]; out[i] = out[j]; out[j] = t;
+  }
+  return out.slice(0, FEED_MAX_CARDS);
+}
+
+function makeFeedVideo() {
+  const v = document.createElement('video');
+  v.playsInline = true;
+  v.setAttribute('playsinline', '');
+  v.setAttribute('webkit-playsinline', '');
+  v.muted = true;
+  v.loop = true;
+  v.preload = 'metadata';
+  v.addEventListener('playing', () => { if (v.parentElement) v.parentElement.classList.add('playing'); });
+  v.addEventListener('timeupdate', () => { if (v === feedCurVid()) updateFeedBar(v); });
+  v.addEventListener('error', () => {
+    if (v !== feedCurVid() || !v.getAttribute('src')) return;
+    const code = v.error && v.error.code;
+    const r = FEED.items[FEED.cur];
+    if (code === 4 || code === 3) setMsg('#feedMsg', `This browser can't decode this video (${esc(r.x)} / codec). Swipe on.`);
+  });
+  return v;
+}
+
+function openFeed() {
+  if (!S.items.length) return;
+  if (!canStream()) { toast('The feed needs streaming, which only works when the page is served over https (not file://).'); return; }
+  FEED.visits++;
+  const items = feedList();
+  if (!items.length) { toast(`No feed-worthy videos in this view (longer than ${FEED_MIN_SECONDS} s).`); return; }
+  FEED.scrollY = window.scrollY;
+  saveScroll();
+  openOverlay('feed');
+  FEED.items = items;
+  FEED.cur = -1;
+  const sc = FEED.scroller;
+  sc.innerHTML = '';
+  FEED.cards = [];
+  const frag = document.createDocumentFragment();
+  items.forEach((r, i) => {
+    const c = make('div', 'feed-card');
+    c.dataset.i = i;
+    const img = make('img', 'feed-poster');
+    img.alt = '';
+    img.decoding = 'async';
+    img.draggable = false;
+    const th = thumbGet(r.h);
+    if (th) img.src = th;
+    c.appendChild(img);
+    c.appendChild(make('div', 'spinner'));
+    frag.appendChild(c);
+    FEED.cards.push(c);
+  });
+  sc.appendChild(frag);
+  sc.scrollTop = 0;
+  if (!FEED.vids.length) for (let k = 0; k < 3; k++) FEED.vids.push(makeFeedVideo());
+  $('#feedHint').hidden = FEED.unmuted;
+  $('#feedFill').style.width = '0';
+  setMsg('#feedMsg', '');
+  setFeedIndex(0, true); // inside the tap: iOS lets playback start
+  feedWantThumbs();
+}
+
+function feedCurVid() {
+  if (FEED.cur < 0) return null;
+  return FEED.vids[FEED.cur % 3];
+}
+
+function setFeedIndex(i, force) {
+  const n = FEED.items.length;
+  i = Math.max(0, Math.min(n - 1, i));
+  if (i === FEED.cur && !force) return;
+  const prev = FEED.cur;
+  FEED.cur = i;
+  const r = FEED.items[i];
+  $('#feedName').textContent = r.n;
+  $('#feedMeta').textContent = [r.d ? fmtDur(r.d) : '', fmtBytes(r.s), pathOf(r)].filter(Boolean).join(' · ');
+  $('#feedCount').textContent = `${i + 1} / ${n}`;
+  setMsg('#feedMsg', '');
+  if (prev >= 0 && FEED.cards[prev]) FEED.cards[prev].classList.remove('cur');
+  FEED.cards[i].classList.add('cur');
+  // Slots: the three consecutive cards i-1, i, i+1 map to distinct videos (j % 3).
+  for (let k = -1; k <= 1; k++) {
+    const j = i + k;
+    if (j < 0 || j >= n) continue;
+    const v = FEED.vids[j % 3];
+    const card = FEED.cards[j];
+    const rr = FEED.items[j];
+    if (v.dataset.h !== rr.h) {
+      v.pause();
+      if (v.parentElement) v.parentElement.classList.remove('playing');
+      registerStream(rr, { firstChunk: FEED_FIRST_CHUNK });
+      v.dataset.h = rr.h;
+      const poster = LB.previews.get(rr.h) || thumbGet(rr.h);
+      if (poster) v.poster = poster; else v.removeAttribute('poster');
+      v.src = streamUrl(rr);
+    }
+    if (v.parentElement !== card) {
+      if (v.parentElement) v.parentElement.classList.remove('playing');
+      card.insertBefore(v, card.firstChild);
+    }
+    if (k === 0) {
+      v.preload = 'auto';
+      v.muted = !FEED.sound;
+      v.play().catch(() => {});
+    } else {
+      v.preload = 'metadata';
+      v.muted = true;
+      if (!v.paused) v.pause();
+    }
+  }
+  // Warm the next two cards (head + tail blocks, download URL) and drop anything else.
+  feedPrefetchPlan([i + 1, i + 2].filter((j) => j < n).map((j) => FEED.items[j]), true);
+  updateFeedBar(feedCurVid());
+}
+
+// ---- prefetch via the service worker (fills its block cache; aborting cancels upstream)
+function feedPrefetch(r, wantTail) {
+  let e = FEED.prefetch.get(r.h);
+  if (e && (!wantTail || e.tail)) return;
+  if (!e) {
+    while (FEED.prefetch.size >= FEED_MAX_PREFETCH) { // oldest first
+      const [h, old] = FEED.prefetch.entries().next().value;
+      old.ac.abort();
+      FEED.prefetch.delete(h);
+    }
+    e = { ac: new AbortController(), tail: false, n: 0 };
+    FEED.prefetch.set(r.h, e);
+    registerStream(r, { firstChunk: FEED_FIRST_CHUNK, warmUrl: true });
+    feedFetchRange(r, e, `bytes=0-${Math.min(r.s, FEED_BLOCK) - 1}`);
+  }
+  if (wantTail && !e.tail) {
+    e.tail = true;
+    const tailStart = Math.floor(Math.max(0, r.s - FEED_TAIL_BYTES) / FEED_BLOCK) * FEED_BLOCK; // block-aligned so it caches
+    if (tailStart >= FEED_BLOCK) feedFetchRange(r, e, `bytes=${tailStart}-${r.s - 1}`);
+  }
+}
+function feedFetchRange(r, e, range) {
+  e.n++;
+  fetch(streamUrl(r), { headers: { Range: range }, signal: e.ac.signal, cache: 'no-store' })
+    .then((res) => res.arrayBuffer())
+    .catch(() => {})
+    .finally(() => { if (--e.n === 0 && FEED.prefetch.get(r.h) === e) FEED.prefetch.delete(r.h); });
+}
+function feedPrefetchPlan(list, withTail) {
+  const keep = new Set(list.map((r) => r.h));
+  for (const [h, e] of FEED.prefetch) if (!keep.has(h)) { e.ac.abort(); FEED.prefetch.delete(h); }
+  for (const r of list) feedPrefetch(r, withTail);
+}
+
+// ---- scrolling: cheap head warm while flinging, full assignment once settled
+FEED.scroller.addEventListener('scroll', () => {
+  if (OV.current !== 'feed') return;
+  const sc = FEED.scroller;
+  const idx = Math.round(sc.scrollTop / Math.max(1, sc.clientHeight));
+  const now = performance.now();
+  if (now - (FEED.lastWarm || 0) > 200 && idx !== FEED.cur) { // while browsing: ~1 MB head only
+    FEED.lastWarm = now;
+    const r = FEED.items[idx];
+    if (r) feedPrefetch(r, false);
+  }
+  clearTimeout(FEED.settleT);
+  FEED.settleT = setTimeout(() => {
+    const i = Math.round(sc.scrollTop / Math.max(1, sc.clientHeight));
+    setFeedIndex(i);
+    feedWantThumbs();
+  }, 120);
+}, { passive: true });
+
+function feedStep(dir) {
+  const sc = FEED.scroller;
+  const j = Math.max(0, Math.min(FEED.items.length - 1, FEED.cur + dir));
+  sc.scrollTo({ top: j * sc.clientHeight, behavior: 'smooth' });
+}
+
+/** Posters for cards around the focus (thumbnails come from IndexedDB or MEGA via the worker). */
+function feedWantThumbs() {
+  const want = [];
+  const now = Date.now();
+  for (let j = Math.max(0, FEED.cur - 2); j <= Math.min(FEED.items.length - 1, FEED.cur + 8); j++) {
+    const r = FEED.items[j];
+    if (!r.tf || TH.map.has(r.h) || TH.none.has(r.h)) continue;
+    const e = TH.err.get(r.h);
+    if (e && now - e < 60000) continue;
+    want.push({ id: r.h, folder: r.L.id, c: r.tc, fah: r.tf, k: r.k });
+  }
+  if (want.length) W.post({ type: 'thumbs', want });
+}
+
+// ---- sound / seek
+function feedToggleSound() {
+  FEED.sound = !FEED.sound;
+  const v = feedCurVid();
+  if (v) { v.muted = !FEED.sound; if (v.paused) v.play().catch(() => {}); }
+  if (FEED.sound) { FEED.unmuted = true; $('#feedHint').hidden = true; }
+}
+FEED.scroller.addEventListener('click', (e) => {
+  if (e.target.closest('#feedBar')) return;
+  feedToggleSound();
+});
+function updateFeedBar(v) {
+  if (FEED.scrubbing) return;
+  $('#feedFill').style.width = v && v.duration ? (100 * v.currentTime / v.duration).toFixed(2) + '%' : '0';
+}
+(() => {
+  const bar = $('#feedBar');
+  const seekTo = (e) => {
+    const v = feedCurVid();
+    if (!v || !v.duration) return;
+    const rect = bar.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left - 12) / Math.max(1, rect.width - 24)));
+    $('#feedFill').style.width = (100 * x).toFixed(2) + '%';
+    clearTimeout(FEED.scrubT);
+    FEED.scrubT = setTimeout(() => { v.currentTime = x * v.duration; }, 40); // coalesce scrubs: no stall storms
+  };
+  bar.addEventListener('pointerdown', (e) => { FEED.scrubbing = true; bar.setPointerCapture(e.pointerId); seekTo(e); });
+  bar.addEventListener('pointermove', (e) => { if (FEED.scrubbing) seekTo(e); });
+  const end = (e) => { if (!FEED.scrubbing) return; seekTo(e); FEED.scrubbing = false; };
+  bar.addEventListener('pointerup', end);
+  bar.addEventListener('pointercancel', () => { FEED.scrubbing = false; });
+})();
+
+/** Tear down on exit: no audio leakage, no stray fetches, grid scroll untouched. */
+function stopFeed() {
+  clearTimeout(FEED.settleT);
+  for (const v of FEED.vids) {
+    v.pause();
+    v.muted = true;
+    v.removeAttribute('src');
+    v.removeAttribute('poster');
+    delete v.dataset.h;
+    v.load(); // aborts the stream -> the SW cancels upstream
+    if (v.parentElement) v.parentElement.removeChild(v);
+  }
+  for (const [, e] of FEED.prefetch) e.ac.abort();
+  FEED.prefetch.clear();
+  FEED.scroller.innerHTML = '';
+  FEED.cards = [];
+  FEED.items = [];
+  FEED.cur = -1;
+  FEED.scrubbing = false;
+  window.scrollTo(0, FEED.scrollY);
+  lastY = window.scrollY;
+}
+
 // ================================================================ controls wiring
 $('#btnRefresh').innerHTML = ICON.refresh;
 $('#btnRefresh').onclick = () => {
@@ -1233,6 +1564,8 @@ $('#btnRefresh').onclick = () => {
   toast('Refreshing folder listings…', 2000);
 };
 $('.i-link').outerHTML = ICON.link;
+$('.i-feed').outerHTML = ICON.feed;
+$('#btnFeed').onclick = openFeed;
 $('.i-search').outerHTML = ICON.search;
 for (const b of document.querySelectorAll('[data-close]')) b.innerHTML = ICON.close;
 $('#btnLinks').onclick = openLinks;
@@ -1310,6 +1643,13 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') lbStep(-1);
     return;
   }
+  if (OV.current === 'feed') {
+    if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === 'j') { e.preventDefault(); feedStep(1); }
+    if (e.key === 'ArrowUp' || e.key === 'PageUp' || e.key === 'k') { e.preventDefault(); feedStep(-1); }
+    if (e.key === ' ') { e.preventDefault(); const v = feedCurVid(); if (v) (v.paused ? v.play().catch(() => {}) : v.pause()); }
+    if (e.key === 'm') feedToggleSound();
+    return;
+  }
   if (!OV.current && e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); }
 });
 
@@ -1321,7 +1661,7 @@ async function boot() {
   S.view.folder = hf || (location.hash ? null : lsGet(LS.folder, null));
   history.replaceState({ f: S.view.folder }, '', hashFor(S.view.folder));
   renderHeader();
-  setupServiceWorker();
+  setupServiceWorker().then(applyVideoCacheCfg);
   await W.start();
 
   if (!S.links.length) { S.ready = true; onViewChanged(); openLinks(); return; }

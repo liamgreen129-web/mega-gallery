@@ -29,8 +29,9 @@ async function handle(m) {
     case 'thumbs': return setWanted(m.want);
     case 'preview': return doPreview(m);
     case 'full': return doFull(m);
-    case 'cacheStats': return post({ type: 'res', req: m.req, thumbs: await idbCount('thumbs') });
+    case 'cacheStats': return post({ type: 'res', req: m.req, thumbs: await idbCount('thumbs'), blocks: await idbSumBlocks() });
     case 'clearThumbs': await idbClear('thumbs'); return post({ type: 'res', req: m.req, ok: true });
+    case 'clearBlocks': await idbClear('blocks'); return post({ type: 'res', req: m.req, ok: true });
   }
 }
 

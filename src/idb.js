@@ -6,9 +6,11 @@
 //   listings  {id: cacheId, root, nodes, needsKey, at}  decrypted folder trees
 //   thumbs    {id: nodeHandle, b: ArrayBuffer | none: 1, at}  server thumbnails (type 0)
 //   streams   {id: nodeHandle, folder, key, size, name, mime}  what the SW needs to stream a file
+//   blocks    {id: handle:blockIndex, h, b: ArrayBuffer (ciphertext), n: bytes, at}  LRU playback cache
+//   meta      {id, ...}  small settings shared with the SW (e.g. 'blockCache': {enabled, max})
 
 const IDB_NAME = 'mega-gallery';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 let idbPromise = null;
 
 export function idbOpen() {
@@ -25,6 +27,12 @@ export function idbOpen() {
       if (!db.objectStoreNames.contains('listings')) db.createObjectStore('listings', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs', { keyPath: 'id' }).createIndex('at', 'at');
       if (!db.objectStoreNames.contains('streams')) db.createObjectStore('streams', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('blocks')) {
+        const b = db.createObjectStore('blocks', { keyPath: 'id' });
+        b.createIndex('n', 'n');            // key cursor over sizes -> total bytes without loading values
+        b.createIndex('atn', ['at', 'n']);  // oldest-first eviction, again without loading values
+      }
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'id' });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -102,6 +110,33 @@ export async function idbTrimThumbs(max) {
       if (!c || toDrop <= 0) return;
       s.delete(c.primaryKey);
       toDrop--;
+      c.continue();
+    };
+  });
+  return dropped;
+}
+
+/** Total bytes held by the encrypted block cache (sums the `n` index keys; no values are read). */
+export function idbSumBlocks() {
+  return idbRun('blocks', 'readonly', (s) => {
+    let sum = 0;
+    const cur = s.index('n').openKeyCursor();
+    cur.onsuccess = () => { const c = cur.result; if (!c) return; sum += c.key || 0; c.continue(); };
+    return () => sum;
+  }).then((v) => v || 0);
+}
+
+/** Evict oldest blocks until the cache holds at most `maxBytes`. Returns the number dropped. */
+export async function idbTrimBlocks(maxBytes) {
+  let dropped = 0;
+  await idbRun('blocks', 'readwrite', (s) => {
+    let sum = 0;
+    const cur = s.index('atn').openKeyCursor(null, 'prev'); // newest first
+    cur.onsuccess = () => {
+      const c = cur.result;
+      if (!c) return;
+      sum += c.key[1] || 0;
+      if (sum > maxBytes) { s.delete(c.primaryKey); dropped++; }
       c.continue();
     };
   });

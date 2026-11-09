@@ -20,6 +20,7 @@
   <div class="bar bar1">
     <nav id="crumbs" aria-label="Folder path"></nav>
     <button id="btnRefresh" class="icon-btn" title="Refresh all folder listings" aria-label="Refresh"></button>
+    <button id="btnFeed" class="pill-btn" title="Watch the videos in this view as a feed"><span class="i-feed"></span>Feed</button>
     <button id="btnLinks" class="pill-btn" title="Manage folder links"><span class="i-link"></span><span id="linkCount">Links</span></button>
   </div>
   <div class="bar bar2">
@@ -70,9 +71,10 @@
     <div id="addMsg" class="form-msg" role="status"></div>
     <ul id="linkList"></ul>
     <div class="sheet-foot">
+      <label class="foot-opt"><input type="checkbox" id="vcacheOn"> Keep a local video cache (up to <span id="vcacheMax"></span>) so revisited clips start instantly</label>
       <div id="cacheInfo"></div>
-      <div class="foot-btns"><button id="btnClearThumbs">Clear thumbnail cache</button><button id="btnRefreshAll" class="primary">Refresh all</button></div>
-      <p class="fine">Everything runs in this page. Listings and thumbnails are cached in this browser only. Videos and full-size photos stream through the page and are never saved to disk.</p>
+      <div class="foot-btns"><button id="btnClearThumbs">Clear thumbnail cache</button><button id="btnClearVideo">Clear video cache</button><button id="btnRefreshAll" class="primary">Refresh all</button></div>
+      <p class="fine">Everything runs in this page. Listings and thumbnails are cached in this browser only. Videos and full-size photos stream through the page; with the video cache on, recently played video data is kept in this browser in its original encrypted form (never decrypted on disk).</p>
     </div>
   </div>
 </div>
@@ -97,6 +99,18 @@
     <a id="plMega" class="pill-btn" target="_blank" rel="noopener noreferrer">Open in MEGA</a>
   </div>
   <div class="ov-msg" id="plMsg"></div>
+</div>
+
+<div id="feed" class="ov" hidden role="dialog" aria-modal="true" aria-label="Video feed">
+  <div class="feed-scroll" id="feedScroll"></div>
+  <div class="ov-top feed-top">
+    <button class="icon-btn" data-close aria-label="Close feed"></button>
+    <div class="ov-title"><div class="t-name" id="feedName"></div><div class="t-meta" id="feedMeta"></div></div>
+    <span class="feed-count" id="feedCount"></span>
+  </div>
+  <div class="feed-hint" id="feedHint">Tap for sound</div>
+  <div id="feedBar" aria-label="Seek"><div class="track"><div class="fill" id="feedFill"></div></div></div>
+  <div class="ov-msg" id="feedMsg"></div>
 </div>
 
 <div id="info" class="ov-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="infoName">

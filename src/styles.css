@@ -385,6 +385,42 @@ select {
 .pl-stage { position: absolute; inset: 0; display: grid; place-items: center; padding-top: calc(var(--safe-t) + 56px); padding-bottom: var(--safe-b); }
 #vid { width: 100%; height: 100%; max-height: 100%; background: #000; }
 
+/* ---------------------------------------------------------------- feed */
+.feed-scroll {
+  position: absolute; inset: 0;
+  overflow-y: scroll; overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.feed-scroll::-webkit-scrollbar { display: none; }
+.feed-card {
+  position: relative; height: 100%;
+  scroll-snap-align: start; scroll-snap-stop: always;
+  background: #000; overflow: hidden;
+}
+.feed-card video, .feed-card .feed-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.feed-card .feed-poster { object-fit: cover; filter: blur(14px); opacity: .55; transform: scale(1.08); transition: opacity .25s; pointer-events: none; }
+.feed-card .feed-poster:not([src]) { display: none; }
+.feed-card.playing .feed-poster { opacity: 0; }
+.feed-card .spinner { left: 50%; top: 50%; margin: -17px 0 0 -17px; }
+.feed-card.playing .spinner, .feed-card:not(.cur) .spinner { display: none; }
+.feed-top { pointer-events: none; }
+.feed-top .icon-btn { pointer-events: auto; }
+.feed-count { font-size: 12px; opacity: .8; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.feed-hint {
+  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 64px); transform: translateX(-50%);
+  padding: 7px 13px; border-radius: 16px; background: rgba(255,255,255,.16); backdrop-filter: blur(8px);
+  font-size: 13px; pointer-events: none; z-index: 3; animation: hint 2.4s ease-in-out infinite;
+}
+@keyframes hint { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+#feedBar { position: absolute; left: 0; right: 0; bottom: var(--safe-b); height: 34px; z-index: 3; touch-action: none; cursor: pointer; }
+#feedBar .track { position: absolute; left: 12px; right: 12px; bottom: 14px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.25); }
+#feedBar .fill { height: 100%; width: 0; border-radius: 2px; background: #fff; }
+#feedBar:active .track { height: 5px; bottom: 13px; }
+.foot-opt { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.4; margin: 2px 0 8px; }
+.foot-opt input { margin: 3px 0 0; flex-shrink: 0; }
+
 #toast {
   position: fixed; left: 50%; bottom: calc(var(--safe-b) + 18px); transform: translateX(-50%);
   z-index: 60;

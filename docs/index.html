@@ -400,6 +400,42 @@ select {
 .pl-stage { position: absolute; inset: 0; display: grid; place-items: center; padding-top: calc(var(--safe-t) + 56px); padding-bottom: var(--safe-b); }
 #vid { width: 100%; height: 100%; max-height: 100%; background: #000; }
 
+/* ---------------------------------------------------------------- feed */
+.feed-scroll {
+  position: absolute; inset: 0;
+  overflow-y: scroll; overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.feed-scroll::-webkit-scrollbar { display: none; }
+.feed-card {
+  position: relative; height: 100%;
+  scroll-snap-align: start; scroll-snap-stop: always;
+  background: #000; overflow: hidden;
+}
+.feed-card video, .feed-card .feed-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.feed-card .feed-poster { object-fit: cover; filter: blur(14px); opacity: .55; transform: scale(1.08); transition: opacity .25s; pointer-events: none; }
+.feed-card .feed-poster:not([src]) { display: none; }
+.feed-card.playing .feed-poster { opacity: 0; }
+.feed-card .spinner { left: 50%; top: 50%; margin: -17px 0 0 -17px; }
+.feed-card.playing .spinner, .feed-card:not(.cur) .spinner { display: none; }
+.feed-top { pointer-events: none; }
+.feed-top .icon-btn { pointer-events: auto; }
+.feed-count { font-size: 12px; opacity: .8; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.feed-hint {
+  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 64px); transform: translateX(-50%);
+  padding: 7px 13px; border-radius: 16px; background: rgba(255,255,255,.16); backdrop-filter: blur(8px);
+  font-size: 13px; pointer-events: none; z-index: 3; animation: hint 2.4s ease-in-out infinite;
+}
+@keyframes hint { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+#feedBar { position: absolute; left: 0; right: 0; bottom: var(--safe-b); height: 34px; z-index: 3; touch-action: none; cursor: pointer; }
+#feedBar .track { position: absolute; left: 12px; right: 12px; bottom: 14px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.25); }
+#feedBar .fill { height: 100%; width: 0; border-radius: 2px; background: #fff; }
+#feedBar:active .track { height: 5px; bottom: 13px; }
+.foot-opt { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.4; margin: 2px 0 8px; }
+.foot-opt input { margin: 3px 0 0; flex-shrink: 0; }
+
 #toast {
   position: fixed; left: 50%; bottom: calc(var(--safe-b) + 18px); transform: translateX(-50%);
   z-index: 60;
@@ -415,6 +451,7 @@ select {
   <div class="bar bar1">
     <nav id="crumbs" aria-label="Folder path"></nav>
     <button id="btnRefresh" class="icon-btn" title="Refresh all folder listings" aria-label="Refresh"></button>
+    <button id="btnFeed" class="pill-btn" title="Watch the videos in this view as a feed"><span class="i-feed"></span>Feed</button>
     <button id="btnLinks" class="pill-btn" title="Manage folder links"><span class="i-link"></span><span id="linkCount">Links</span></button>
   </div>
   <div class="bar bar2">
@@ -465,9 +502,10 @@ select {
     <div id="addMsg" class="form-msg" role="status"></div>
     <ul id="linkList"></ul>
     <div class="sheet-foot">
+      <label class="foot-opt"><input type="checkbox" id="vcacheOn"> Keep a local video cache (up to <span id="vcacheMax"></span>) so revisited clips start instantly</label>
       <div id="cacheInfo"></div>
-      <div class="foot-btns"><button id="btnClearThumbs">Clear thumbnail cache</button><button id="btnRefreshAll" class="primary">Refresh all</button></div>
-      <p class="fine">Everything runs in this page. Listings and thumbnails are cached in this browser only. Videos and full-size photos stream through the page and are never saved to disk.</p>
+      <div class="foot-btns"><button id="btnClearThumbs">Clear thumbnail cache</button><button id="btnClearVideo">Clear video cache</button><button id="btnRefreshAll" class="primary">Refresh all</button></div>
+      <p class="fine">Everything runs in this page. Listings and thumbnails are cached in this browser only. Videos and full-size photos stream through the page; with the video cache on, recently played video data is kept in this browser in its original encrypted form (never decrypted on disk).</p>
     </div>
   </div>
 </div>
@@ -494,6 +532,18 @@ select {
   <div class="ov-msg" id="plMsg"></div>
 </div>
 
+<div id="feed" class="ov" hidden role="dialog" aria-modal="true" aria-label="Video feed">
+  <div class="feed-scroll" id="feedScroll"></div>
+  <div class="ov-top feed-top">
+    <button class="icon-btn" data-close aria-label="Close feed"></button>
+    <div class="ov-title"><div class="t-name" id="feedName"></div><div class="t-meta" id="feedMeta"></div></div>
+    <span class="feed-count" id="feedCount"></span>
+  </div>
+  <div class="feed-hint" id="feedHint">Tap for sound</div>
+  <div id="feedBar" aria-label="Seek"><div class="track"><div class="fill" id="feedFill"></div></div></div>
+  <div class="ov-msg" id="feedMsg"></div>
+</div>
+
 <div id="info" class="ov-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="infoName">
   <div class="sheet-card small">
     <div class="sheet-head"><h2 id="infoName"></h2><button class="icon-btn" data-close aria-label="Close"></button></div>
@@ -505,7 +555,7 @@ select {
 <div id="toast" role="status" hidden></div>
 <script>(() => {
 'use strict';
-const BUILD = "202611091015";
+const BUILD = "202611091113";
 // core.js — shared MEGA client code.
 // Runs unchanged in: the page, the walker/thumbnail Web Worker, the streaming
 // Service Worker, and Node (for tests). The build strips `export` and inlines it.
@@ -1160,9 +1210,11 @@ function mimeOf(name) {
 //   listings  {id: cacheId, root, nodes, needsKey, at}  decrypted folder trees
 //   thumbs    {id: nodeHandle, b: ArrayBuffer | none: 1, at}  server thumbnails (type 0)
 //   streams   {id: nodeHandle, folder, key, size, name, mime}  what the SW needs to stream a file
+//   blocks    {id: handle:blockIndex, h, b: ArrayBuffer (ciphertext), n: bytes, at}  LRU playback cache
+//   meta      {id, ...}  small settings shared with the SW (e.g. 'blockCache': {enabled, max})
 
 const IDB_NAME = 'mega-gallery';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 let idbPromise = null;
 
 function idbOpen() {
@@ -1179,6 +1231,12 @@ function idbOpen() {
       if (!db.objectStoreNames.contains('listings')) db.createObjectStore('listings', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs', { keyPath: 'id' }).createIndex('at', 'at');
       if (!db.objectStoreNames.contains('streams')) db.createObjectStore('streams', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('blocks')) {
+        const b = db.createObjectStore('blocks', { keyPath: 'id' });
+        b.createIndex('n', 'n');            // key cursor over sizes -> total bytes without loading values
+        b.createIndex('atn', ['at', 'n']);  // oldest-first eviction, again without loading values
+      }
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'id' });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -1262,7 +1320,34 @@ async function idbTrimThumbs(max) {
   return dropped;
 }
 
-const WORKER_SRC = "'use strict';\n// core.js — shared MEGA client code.\n// Runs unchanged in: the page, the walker/thumbnail Web Worker, the streaming\n// Service Worker, and Node (for tests). The build strips `export` and inlines it.\n//\n// Logic follows megajs v1.3 (API request + hashcash, key/attribute handling) and\n// MEGA's own webclient (file-attribute/thumbnail protocol, media attributes).\n\n// ---------------------------------------------------------------- base64url\nconst B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst B64_LUT = new Int16Array(128).fill(-1);\nfor (let i = 0; i < 64; i++) B64_LUT[B64_CHARS.charCodeAt(i)] = i;\nB64_LUT[43] = 62; // '+'\nB64_LUT[47] = 63; // '/'\n\nfunction b64dec(s) {\n  const out = new Uint8Array(((s.length * 3) >> 2) + 3);\n  let n = 0, buf = 0, bits = 0;\n  for (let i = 0; i < s.length; i++) {\n    const c = s.charCodeAt(i);\n    const v = c < 128 ? B64_LUT[c] : -1;\n    if (v < 0) continue;\n    buf = ((buf << 6) | v) & 0xffffff;\n    bits += 6;\n    if (bits >= 8) { bits -= 8; out[n++] = (buf >> bits) & 255; }\n  }\n  return out.slice(0, n);\n}\n\nfunction b64enc(u8) {\n  const C = B64_CHARS;\n  let s = '', i = 0;\n  for (; i + 2 < u8.length; i += 3) {\n    const v = (u8[i] << 16) | (u8[i + 1] << 8) | u8[i + 2];\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63] + C[(v >> 6) & 63] + C[v & 63];\n  }\n  if (u8.length - i === 1) {\n    const v = u8[i] << 16;\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63];\n  } else if (u8.length - i === 2) {\n    const v = (u8[i] << 16) | (u8[i + 1] << 8);\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63] + C[(v >> 6) & 63];\n  }\n  return s;\n}\n\nconst UTF8 = new TextDecoder();\n\n// ---------------------------------------------------------------- AES-128 (pure JS)\n// Table-based AES after SJCL. Synchronous and allocation-free per block, which\n// beats WebCrypto for the thousands of tiny ECB/CBC operations a folder needs.\nconst AES_T = (() => {\n  const enc = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint8Array(256)];\n  const dec = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint8Array(256)];\n  const sbox = enc[4], sboxInv = dec[4];\n  const d = new Uint8Array(256), th = new Uint8Array(256);\n  for (let i = 0; i < 256; i++) th[(d[i] = (i << 1) ^ ((i >> 7) * 283)) ^ i] = i;\n  let x, xInv, x2, x4, x8, s, tEnc, tDec;\n  for (x = xInv = 0; !sbox[x]; x ^= x2 || 1, xInv = th[xInv] || 1) {\n    s = xInv ^ (xInv << 1) ^ (xInv << 2) ^ (xInv << 3) ^ (xInv << 4);\n    s = (s >> 8) ^ (s & 255) ^ 99;\n    sbox[x] = s;\n    sboxInv[s] = x;\n    x8 = d[(x4 = d[(x2 = d[x])])];\n    tDec = (x8 * 0x1010101) ^ (x4 * 0x10001) ^ (x2 * 0x101) ^ (x * 0x1010100);\n    tEnc = (d[s] * 0x101) ^ (s * 0x1010100);\n    for (let i = 0; i < 4; i++) {\n      enc[i][x] = tEnc = (tEnc << 24) ^ (tEnc >>> 8);\n      dec[i][s] = tDec = (tDec << 24) ^ (tDec >>> 8);\n    }\n  }\n  return [enc, dec];\n})();\n\nclass AES {\n  constructor(key) {\n    if (!key || key.length !== 16) throw new Error('AES key must be 16 bytes');\n    const sbox = AES_T[0][4], decT = AES_T[1];\n    const ek = new Int32Array(44), dk = new Int32Array(44);\n    for (let i = 0; i < 4; i++) ek[i] = (key[4 * i] << 24) | (key[4 * i + 1] << 16) | (key[4 * i + 2] << 8) | key[4 * i + 3];\n    let i, j, tmp, rcon = 1;\n    for (i = 4; i < 44; i++) {\n      tmp = ek[i - 1];\n      if (i % 4 === 0) {\n        tmp = (sbox[tmp >>> 24] << 24) ^ (sbox[(tmp >> 16) & 255] << 16) ^ (sbox[(tmp >> 8) & 255] << 8) ^ sbox[tmp & 255];\n        tmp = (tmp << 8) ^ (tmp >>> 24) ^ (rcon << 24);\n        rcon = (rcon << 1) ^ ((rcon >> 7) * 283);\n      }\n      ek[i] = ek[i - 4] ^ tmp;\n    }\n    for (j = 0; i; j++, i--) {\n      tmp = ek[j & 3 ? i : i - 4];\n      dk[j] = i <= 4 || j < 4 ? tmp\n        : decT[0][sbox[tmp >>> 24]] ^ decT[1][sbox[(tmp >> 16) & 255]] ^ decT[2][sbox[(tmp >> 8) & 255]] ^ decT[3][sbox[tmp & 255]];\n    }\n    this.k = [ek, dk];\n    this.w = new Int32Array(4);\n    this.o = new Int32Array(4);\n  }\n\n  _crypt(dir) {\n    const inp = this.w, out = this.o, key = this.k[dir], T = AES_T[dir];\n    const t0 = T[0], t1 = T[1], t2 = T[2], t3 = T[3], sbox = T[4];\n    let a = inp[0] ^ key[0], b = inp[dir ? 3 : 1] ^ key[1], c = inp[2] ^ key[2], d = inp[dir ? 1 : 3] ^ key[3];\n    let a2, b2, c2, k = 4;\n    for (let r = 0; r < 9; r++) {\n      a2 = t0[a >>> 24] ^ t1[(b >> 16) & 255] ^ t2[(c >> 8) & 255] ^ t3[d & 255] ^ key[k];\n      b2 = t0[b >>> 24] ^ t1[(c >> 16) & 255] ^ t2[(d >> 8) & 255] ^ t3[a & 255] ^ key[k + 1];\n      c2 = t0[c >>> 24] ^ t1[(d >> 16) & 255] ^ t2[(a >> 8) & 255] ^ t3[b & 255] ^ key[k + 2];\n      d = t0[d >>> 24] ^ t1[(a >> 16) & 255] ^ t2[(b >> 8) & 255] ^ t3[c & 255] ^ key[k + 3];\n      k += 4; a = a2; b = b2; c = c2;\n    }\n    for (let r = 0; r < 4; r++) {\n      out[dir ? 3 & -r : r] = (sbox[a >>> 24] << 24) ^ (sbox[(b >> 16) & 255] << 16) ^ (sbox[(c >> 8) & 255] << 8) ^ sbox[d & 255] ^ key[k++];\n      a2 = a; a = b; b = c; c = d; d = a2;\n    }\n  }\n\n  _load(u8, off) {\n    const w = this.w;\n    for (let i = 0; i < 4; i++, off += 4) w[i] = (u8[off] << 24) | (u8[off + 1] << 16) | (u8[off + 2] << 8) | u8[off + 3];\n  }\n\n  _store(u8, off) {\n    const o = this.o;\n    for (let i = 0; i < 4; i++, off += 4) {\n      const v = o[i];\n      u8[off] = v >>> 24; u8[off + 1] = (v >> 16) & 255; u8[off + 2] = (v >> 8) & 255; u8[off + 3] = v & 255;\n    }\n  }\n\n  /** In-place ECB decrypt (MEGA uses this to unwrap node keys). */\n  decryptECB(u8) {\n    for (let off = 0; off + 16 <= u8.length; off += 16) { this._load(u8, off); this._crypt(1); this._store(u8, off); }\n    return u8;\n  }\n\n  encryptECB(u8) {\n    for (let off = 0; off + 16 <= u8.length; off += 16) { this._load(u8, off); this._crypt(0); this._store(u8, off); }\n    return u8;\n  }\n\n  /** In-place CBC decrypt, zero IV, no padding (node attributes and thumbnails). */\n  decryptCBC(u8) {\n    let p0 = 0, p1 = 0, p2 = 0, p3 = 0;\n    const w = this.w, o = this.o;\n    for (let off = 0; off + 16 <= u8.length; off += 16) {\n      this._load(u8, off);\n      const c0 = w[0], c1 = w[1], c2 = w[2], c3 = w[3];\n      this._crypt(1);\n      o[0] ^= p0; o[1] ^= p1; o[2] ^= p2; o[3] ^= p3;\n      this._store(u8, off);\n      p0 = c0; p1 = c1; p2 = c2; p3 = c3;\n    }\n    return u8;\n  }\n}\n\n// ---------------------------------------------------------------- keys & attributes\n/** 32-byte file key -> 16-byte AES key (k[0..15] XOR k[16..31]); folder keys pass through. */\nfunction nodeAesKey(k) {\n  if (k.length !== 32) return k;\n  const out = new Uint8Array(16);\n  for (let i = 0; i < 16; i++) out[i] = k[i] ^ k[i + 16];\n  return out;\n}\n\n/** Decrypt a node's `a` attribute blob. Returns {n, c, ...} or null when the key is wrong. */\nfunction decryptAttrs(aB64, key16) {\n  if (!aB64) return null;\n  const buf = b64dec(aB64);\n  if (!buf.length || buf.length % 16) return null;\n  new AES(key16).decryptCBC(buf);\n  let end = buf.length;\n  while (end > 0 && buf[end - 1] === 0) end--;\n  // 'MEGA{\"'\n  if (buf[0] !== 77 || buf[1] !== 69 || buf[2] !== 71 || buf[3] !== 65 || buf[4] !== 123 || buf[5] !== 34) return null;\n  const json = UTF8.decode(buf.subarray(4, end));\n  try {\n    return JSON.parse(json);\n  } catch {\n    const m = json.match(/\"n\"\\s*:\\s*\"((?:\\\\\"|[^\"])*)\"/);\n    return m ? { n: m[1] } : { n: 'MALFORMED_ATTRIBUTES' };\n  }\n}\n\n/** Original file mtime (unix seconds) encoded in the fingerprint attribute `c`. */\nfunction fingerprintMtime(c) {\n  if (typeof c !== 'string' || c.length < 24) return 0;\n  const b = b64dec(c);\n  if (b.length < 18) return 0;\n  const len = b[16];\n  if (!len || len > 8 || b.length < 17 + len) return 0;\n  let t = 0;\n  for (let i = len - 1; i >= 0; i--) t = t * 256 + b[17 + i];\n  // Reject nonsense (before 1980 or more than a year in the future).\n  return t > 315532800 && t < Date.now() / 1000 + 31536000 ? t : 0;\n}\n\n/** Parse a node's `fa` string (\"924:0*AbCd…/924:1*EfGh…/…:8*…\"). */\nfunction parseFa(fa) {\n  const r = {};\n  if (!fa) return r;\n  const re = /(\\d+):(\\d+)\\*([\\w-]+)/g;\n  let m;\n  while ((m = re.exec(fa))) {\n    const type = +m[2];\n    if (type === 0) r.thumb = { c: m[1], h: m[3] };\n    else if (type === 1) r.preview = { c: m[1], h: m[3] };\n  }\n  return r;\n}\n\n// XXTEA (media attributes, type 8/9 inside `fa`) — ported from MEGA webclient nodedec.js\nfunction xxteaDecrypt(v, k) {\n  const DELTA = 0x9e3779b9;\n  const int32 = (i) => i & 0xffffffff;\n  const mx = (sum, y, z, p, e) => (((z >>> 5) ^ (y << 2)) + ((y >>> 3) ^ (z << 4))) ^ ((sum ^ y) + (k[(p & 3) ^ e] ^ z));\n  const n = v.length - 1;\n  let y = v[0], z, sum, e, p;\n  const q = Math.floor(6 + 52 / v.length);\n  for (sum = int32(q * DELTA); sum !== 0; sum = int32(sum - DELTA)) {\n    e = (sum >>> 2) & 3;\n    for (p = n; p > 0; --p) {\n      z = v[p - 1];\n      y = v[p] = int32(v[p] - mx(sum, y, z, p, e));\n    }\n    z = v[n];\n    y = v[0] = int32(v[0] - mx(sum, y, z, 0, e));\n  }\n  return v;\n}\n\n/** Decode width/height/fps/duration from the inline `:8*` media attribute. Zero network. */\nfunction decodeMediaAttrs(fa, key32) {\n  if (!fa || !key32 || key32.length !== 32) return null;\n  const pos = fa.indexOf(':8*');\n  if (pos < 0) return null;\n  const raw = b64dec(fa.substr(pos + 3, 11));\n  if (raw.length < 8) return null;\n  const v = new Uint32Array(2);\n  v[0] = raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24);\n  v[1] = raw[4] | (raw[5] << 8) | (raw[6] << 16) | (raw[7] << 24);\n  const k = new Uint32Array(4);\n  for (let i = 0; i < 4; i++) {\n    const o = 16 + i * 4;\n    k[i] = (key32[o] << 24) | (key32[o + 1] << 16) | (key32[o + 2] << 8) | key32[o + 3];\n  }\n  xxteaDecrypt(v, k);\n  const b = new Uint8Array(8);\n  for (let i = 0; i < 2; i++) {\n    b[i * 4] = v[i] & 255; b[i * 4 + 1] = (v[i] >>> 8) & 255; b[i * 4 + 2] = (v[i] >>> 16) & 255; b[i * 4 + 3] = v[i] >>> 24;\n  }\n  let width = (b[0] >> 1) + ((b[1] & 127) << 7);\n  if (b[0] & 1) width = (width << 3) + 16384;\n  let height = b[2] + ((b[3] & 63) << 8);\n  if (b[1] & 128) height = (height << 3) + 16384;\n  let fps = (b[3] >> 7) + ((b[4] & 63) << 1);\n  if (b[3] & 64) fps = (fps << 3) + 128;\n  let playtime = (b[4] >> 7) + (b[5] << 1) + (b[6] << 9);\n  if (b[4] & 64) playtime = playtime * 60 + 131100;\n  return { width, height, fps, playtime };\n}\n\n// ---------------------------------------------------------------- links\nclass LinkError extends Error {}\n\n/**\n * Normalise a pasted MEGA folder link. Accepts:\n *   https://mega.nz/folder/ID#KEY            (+ /folder/SUB or /file/FILE suffix)\n *   https://mega.nz/#F!ID!KEY                (+ !SUB)\n *   mega.co.nz / www. variants, missing scheme, surrounding text/quotes/<>,\n *   links with no key (key can be supplied later).\n */\nfunction parseMegaLink(input) {\n  let s = String(input || '').trim();\n  if (!s) throw new LinkError('Paste a MEGA folder link.');\n  // Pull the first mega URL out of surrounding text.\n  const m = s.match(/(?:https?:\\/\\/)?(?:www\\.)?mega(?:\\.co)?\\.nz\\/[^\\s\"'<>]+/i) || s.match(/#?F![\\w-]+(?:![\\w-]*)*/);\n  if (m) s = m[0];\n  s = s.replace(/\\s+/g, '').replace(/[)\\].,;]+$/, '');\n  try { s = decodeURIComponent(s); } catch { /* keep as-is */ }\n\n  let id, key = null, sub = null;\n  let mm;\n  if ((mm = s.match(/\\/(file|folder|embed)\\/([\\w-]+)(?:#([\\w-]*))?(.*)$/i))) {\n    if (mm[1].toLowerCase() !== 'folder') throw new LinkError('That is a single-file link. Paste a folder link (mega.nz/folder/…).');\n    id = mm[2];\n    key = mm[3] || null;\n    const rest = mm[4] || '';\n    const subm = rest.match(/\\/folder\\/([\\w-]+)/i);\n    if (subm) sub = subm[1];\n  } else if ((mm = s.match(/#?(F?)!([\\w-]+)(?:!([\\w-]*))?(?:!([\\w-]+))?/))) {\n    if (!mm[1]) throw new LinkError('That is a single-file link. Paste a folder link (#F!…).');\n    id = mm[2];\n    key = mm[3] || null;\n    sub = mm[4] || null;\n  } else {\n    throw new LinkError('Not a MEGA folder link. Expected mega.nz/folder/ID#KEY or mega.nz/#F!ID!KEY.');\n  }\n  if (!/^[\\w-]{8}$/.test(id)) throw new LinkError(`Folder ID \"${id}\" should be 8 characters.`);\n  if (key !== null && !/^[\\w-]{22}$/.test(key)) throw new LinkError(`Decryption key should be 22 characters (got ${key.length}).`);\n  if (sub !== null && !/^[\\w-]{8}$/.test(sub)) sub = null;\n  return { id, key, sub, url: canonicalLink(id, key, sub) };\n}\n\nfunction canonicalLink(id, key, sub) {\n  return `https://mega.nz/folder/${id}${key ? '#' + key : ''}${sub ? '/folder/' + sub : ''}`;\n}\n\n// ---------------------------------------------------------------- API\nconst API_ERRORS = {\n  '-1': 'MEGA internal error', '-2': 'Invalid request', '-3': 'MEGA is busy, try again',\n  '-4': 'Rate limited by MEGA, slow down', '-6': 'Too many requests', '-8': 'Link expired',\n  '-9': 'Not found: the folder was deleted or the link is wrong', '-11': 'Access denied',\n  '-14': 'Wrong decryption key', '-15': 'Session expired', '-16': 'This link was taken down or blocked',\n  '-17': 'Transfer quota exceeded', '-18': 'Temporarily unavailable', '-19': 'Too many connections',\n};\n\nclass MegaError extends Error {\n  constructor(code, extra) {\n    super((API_ERRORS[code] || `MEGA error ${code}`) + (extra ? ` (${extra})` : ''));\n    this.code = code;\n  }\n}\n\nfunction sleep(ms, signal) {\n  return new Promise((resolve, reject) => {\n    if (signal && signal.aborted) return reject(new DOMException('Aborted', 'AbortError'));\n    const t = setTimeout(resolve, ms);\n    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });\n  });\n}\n\n// Port of megajs generateHashcashToken (MEGA's anti-abuse proof-of-work).\nasync function solveHashcash(challenge) {\n  const [versionStr, easinessStr, , tokenStr] = challenge.split(':');\n  if (Number(versionStr) !== 1) throw new Error('Unsupported MEGA hashcash challenge');\n  const easiness = Number(easinessStr);\n  const base = ((easiness & 63) << 1) + 1;\n  const shifts = (easiness >> 6) * 7 + 3;\n  const threshold = base << shifts;\n  const token = b64dec(tokenStr);\n  const buffer = new Uint8Array(4 + 262144 * 48);\n  for (let i = 0; i < 262144; i++) buffer.set(token, 4 + i * 48);\n  for (;;) {\n    const view = new DataView(await crypto.subtle.digest('SHA-256', buffer));\n    if (view.getUint32(0) <= threshold) return `1:${tokenStr}:${b64enc(buffer.slice(0, 4))}`;\n    let j = 0;\n    for (;;) { buffer[j]++; if (buffer[j++]) break; }\n  }\n}\n\n/** Minimal MEGA API client: request sequencing, polite concurrency, EAGAIN backoff, hashcash. */\nclass MegaApi {\n  constructor(opts = {}) {\n    this.gateway = opts.gateway || 'https://g.api.mega.co.nz/';\n    this.seq = Math.floor(Math.random() * 1e9);\n    this.max = opts.maxConcurrent || 3;\n    this.active = 0;\n    this.waiters = [];\n  }\n\n  async req(payload, opts = {}) {\n    if (this.active >= this.max) await new Promise((r) => this.waiters.push(r));\n    this.active++;\n    try { return await this._req(payload, opts); } finally {\n      this.active--;\n      const next = this.waiters.shift();\n      if (next) next();\n    }\n  }\n\n  async _req(payload, { n, signal } = {}) {\n    let hashcash = null, busy = 0, netRetry = false, hcTries = 0;\n    for (;;) {\n      const qs = `id=${++this.seq}${n ? '&n=' + encodeURIComponent(n) : ''}`;\n      const headers = { 'Content-Type': 'application/json' };\n      if (hashcash) headers['X-Hashcash'] = hashcash;\n      let res;\n      try {\n        res = await fetch(`${this.gateway}cs?${qs}`, { method: 'POST', headers, body: JSON.stringify([payload]), signal });\n      } catch (e) {\n        if (e.name === 'AbortError' || (signal && signal.aborted)) throw e;\n        if (netRetry) throw new Error(`Network error talking to MEGA (${e.message})`);\n        netRetry = true; // retry-once for plain network failures\n        await sleep(1200, signal);\n        continue;\n      }\n      const challenge = res.headers.get('X-Hashcash');\n      if (challenge && hcTries++ < 3) { hashcash = await solveHashcash(challenge); continue; }\n      if (res.status >= 500 || res.status === 429) {\n        if (busy++ < 4) { await sleep(600 * 2 ** busy + Math.random() * 400, signal); continue; }\n        throw new Error(`MEGA API unavailable (HTTP ${res.status})`);\n      }\n      if (!res.ok) throw new Error(`MEGA API HTTP ${res.status}`);\n      const json = await res.json();\n      const r = Array.isArray(json) ? json[0] : json;\n      if (typeof r === 'number' && r < 0) {\n        if ((r === -3 || r === -4 || r === -6) && busy++ < 5) { await sleep(500 * 2 ** busy + Math.random() * 500, signal); continue; }\n        throw new MegaError(r);\n      }\n      return r;\n    }\n  }\n}\n\n// ---------------------------------------------------------------- folder listing\n/**\n * One `f` call with r:1 returns the whole tree under a public folder link.\n * Decrypts keys/attributes in slices, yielding between slices.\n * Returns compact records: {h,p,t,s,ts,mt,n,k,fa,d,w,hh}\n */\nasync function listFolder(api, link, { signal, onProgress } = {}) {\n  onProgress && onProgress({ phase: 'fetch' });\n  const resp = await api.req({ a: 'f', c: 1, ca: 1, r: 1 }, { n: link.id, signal });\n  const f = (resp && resp.f) || [];\n  if (!f.length) throw new MegaError(-9);\n  return decryptListing(f, link, { signal, onProgress });\n}\n\nasync function decryptListing(f, link, { signal, onProgress } = {}) {\n  const shareAes = link.key ? new AES(b64dec(link.key)) : null;\n  const root = f.find((n) => typeof n.k === 'string' && n.k.split('/').some((p) => p.split(':')[0] === n.h)) || f.find((n) => n.t === 1) || f[0];\n  const out = [];\n  let badKey = 0, okKey = 0;\n  const SLICE = 1500;\n  for (let i = 0; i < f.length; i++) {\n    const n = f[i];\n    const rec = { h: n.h, p: n.h === root.h ? '' : n.p, t: n.t === 1 ? 1 : 0, s: n.s || 0, ts: n.ts || 0, mt: n.ts || 0, n: null };\n    if (shareAes && typeof n.k === 'string') {\n      const parts = n.k.split('/');\n      // Prefer the entry keyed by the share root.\n      parts.sort((a, b) => (b.startsWith(root.h + ':') ? 1 : 0) - (a.startsWith(root.h + ':') ? 1 : 0));\n      for (const part of parts) {\n        const kb = part.slice(part.indexOf(':') + 1);\n        if (!kb || kb.length >= 44) continue; // RSA-wrapped keys are for logged-in owners only\n        const k = b64dec(kb);\n        if (k.length !== 16 && k.length !== 32) continue;\n        shareAes.decryptECB(k);\n        const at = decryptAttrs(n.a, nodeAesKey(k));\n        if (at) {\n          rec.n = typeof at.n === 'string' ? at.n : '';\n          const mt = fingerprintMtime(at.c);\n          if (mt) rec.mt = mt;\n          if (k.length === 32) rec.k = b64enc(k);\n          if (n.fa && k.length === 32) {\n            const ma = decodeMediaAttrs(n.fa, k);\n            if (ma && ma.playtime) rec.d = ma.playtime;\n            if (ma && ma.width) { rec.w = ma.width; rec.hh = ma.height; }\n          }\n          break;\n        }\n      }\n      if (rec.n === null) badKey++; else okKey++;\n    }\n    if (n.fa) rec.fa = n.fa;\n    out.push(rec);\n    if (i % SLICE === SLICE - 1) {\n      onProgress && onProgress({ phase: 'decrypt', done: i + 1, total: f.length });\n      await sleep(0, signal);\n    }\n  }\n  if (shareAes && okKey === 0 && badKey > 0) throw new MegaError(-14);\n  let rootH = root.h;\n  let nodes = out;\n  if (link.sub && link.sub !== root.h) {\n    // Restrict to the subtree of a /folder/SUB link.\n    const kids = new Map();\n    for (const r of out) { if (!kids.has(r.p)) kids.set(r.p, []); kids.get(r.p).push(r); }\n    const subRec = out.find((r) => r.h === link.sub);\n    if (!subRec) throw new LinkError('Subfolder from the link was not found inside the folder.');\n    nodes = [];\n    const stack = [subRec];\n    while (stack.length) {\n      const r = stack.pop();\n      nodes.push(r);\n      const ch = kids.get(r.h);\n      if (ch) for (const c of ch) stack.push(c);\n    }\n    subRec.p = '';\n    rootH = subRec.h;\n  }\n  onProgress && onProgress({ phase: 'done', done: f.length, total: f.length });\n  return { root: rootH, nodes, needsKey: !shareAes };\n}\n\n// ---------------------------------------------------------------- file attributes (thumbnails / previews)\n/**\n * Fetch and decrypt server-generated thumbnails (type 0) or previews (type 1).\n * items: [{id, fah (b64 8-byte handle), key (b64 32-byte node key)}], all on the same fa cluster.\n * Many handles go in ONE POST; the reply is [8B handle][4B LE len][ciphertext]...\n * Returns Map(id -> Uint8Array JPEG).\n */\nasync function fetchFileAttributes(api, folderId, type, items, { signal } = {}) {\n  if (!items.length) return new Map();\n  const servers = await faServers(api, folderId, items[0].fah, { signal });\n  return postFileAttributes(servers, type, items, { signal });\n}\n\n/**\n * Ask the API which storage server holds a cluster's file attributes.\n * The URL is reusable for the same cluster (measured: still valid well after\n * first use), so callers cache it per folder+cluster and skip this round trip.\n */\nasync function faServers(api, folderId, fah, { signal } = {}) {\n  const res = await api.req({ a: 'ufa', fah, ssl: 2, r: 1 }, { n: folderId, signal });\n  if (!res || typeof res.p !== 'string') throw new Error('MEGA returned no file-attribute server');\n  const servers = [res.p];\n  for (let i = 0; typeof res['p' + i] === 'string'; i++) servers.push(res['p' + i]);\n  return servers;\n}\n\n/**\n * POST many 8-byte handles (same cluster!) to the attribute server(s) and decrypt the reply.\n * Server latency is ~1–1.5 s regardless of batch size, so batch generously.\n */\nasync function postFileAttributes(servers, type, items, { signal } = {}) {\n  const out = new Map();\n  const byHandle = new Map();\n  for (const it of items) {\n    const hb = b64dec(it.fah);\n    if (hb.length !== 8) continue;\n    const key = String.fromCharCode.apply(null, hb);\n    if (!byHandle.has(key)) byHandle.set(key, { hb, items: [] });\n    byHandle.get(key).items.push(it);\n  }\n  const groups = [...byHandle.values()];\n  if (!groups.length) return out;\n  // Split handles across the servers the API handed out (as the webclient does).\n  const per = Math.ceil(groups.length / servers.length);\n  await Promise.all(servers.map(async (srv, si) => {\n    const slice = groups.slice(si * per, (si + 1) * per);\n    if (!slice.length) return;\n    const body = new Uint8Array(slice.length * 8);\n    slice.forEach((g, i) => body.set(g.hb, i * 8));\n    const url = srv.replace(/^http:/, 'https:') + '/' + type;\n    const resp = await fetch(url, { method: 'POST', body, signal });\n    if (!resp.ok) throw new Error(`Thumbnail server HTTP ${resp.status}`);\n    const buf = new Uint8Array(await resp.arrayBuffer());\n    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);\n    let i = 0;\n    while (i + 12 <= buf.length) {\n      const hkey = String.fromCharCode.apply(null, buf.subarray(i, i + 8));\n      const len = dv.getUint32(i + 8, true);\n      i += 12;\n      if (i + len > buf.length) break;\n      const g = byHandle.get(hkey);\n      if (g && len && len % 16 === 0) {\n        for (const it of g.items) {\n          const data = buf.slice(i, i + len);\n          new AES(nodeAesKey(b64dec(it.key))).decryptCBC(data);\n          // Trim zero padding after the JPEG EOI marker when present.\n          let end = data.length;\n          while (end > 2 && data[end - 1] === 0) end--;\n          out.set(it.id, data.subarray(0, end));\n        }\n      }\n      i += len;\n    }\n  }));\n  return out;\n}\n\n// ---------------------------------------------------------------- file content (AES-CTR, ranged)\n/** Key material for ranged decryption: {aes: 16B key, nonce: 8B}. */\nfunction fileCtrParams(key32b64) {\n  const k = b64dec(key32b64);\n  return { aes: nodeAesKey(k), nonce: k.slice(16, 24) };\n}\n\n/** Counter block for byte offset `pos` (must be a multiple of 16). */\nfunction ctrBlock(nonce, pos) {\n  const iv = new Uint8Array(16);\n  iv.set(nonce, 0);\n  let block = Math.floor(pos / 16);\n  for (let i = 15; i >= 8; i--) { iv[i] = block % 256; block = Math.floor(block / 256); }\n  return iv;\n}\n\n/**\n * Decrypt `data` that starts at file offset `pos` (multiple of 16).\n * Uses native WebCrypto AES-CTR when available, pure JS otherwise (e.g. insecure file:// contexts).\n * `ctx` caches the imported CryptoKey: {aes, nonce, ck?, js?}\n */\nasync function ctrDecrypt(ctx, pos, data) {\n  const subtle = globalThis.crypto && globalThis.crypto.subtle;\n  if (subtle && !ctx.noSubtle) {\n    try {\n      if (!ctx.ck) ctx.ck = await subtle.importKey('raw', ctx.aes, 'AES-CTR', false, ['decrypt']);\n      return new Uint8Array(await subtle.decrypt({ name: 'AES-CTR', counter: ctrBlock(ctx.nonce, pos), length: 64 }, ctx.ck, data));\n    } catch (e) {\n      ctx.noSubtle = true;\n    }\n  }\n  const js = ctx.js || (ctx.js = new AES(ctx.aes));\n  const out = new Uint8Array(data.length);\n  const ks = new Uint8Array(16);\n  for (let off = 0; off < data.length; off += 16) {\n    ks.set(ctrBlock(ctx.nonce, pos + off));\n    js.encryptECB(ks);\n    const n = Math.min(16, data.length - off);\n    for (let i = 0; i < n; i++) out[off + i] = data[off + i] ^ ks[i];\n  }\n  return out;\n}\n\n/** Ask MEGA for a temporary download URL for a node inside a public folder. */\nasync function getDownloadUrl(api, folderId, handle, { signal } = {}) {\n  const r = await api.req({ a: 'g', g: 1, ssl: 2, n: handle }, { n: folderId, signal });\n  if (!r || typeof r.g !== 'string' || !/^https?:/.test(r.g)) {\n    if (r && typeof r.e === 'number' && r.e < 0) throw new MegaError(r.e);\n    throw new Error('MEGA did not return a download URL (possibly rate limited).');\n  }\n  return { url: r.g.replace(/^http:/, 'https:'), size: r.s };\n}\n\n// ---------------------------------------------------------------- file typing\nconst PHOTO_EXT = new Set(['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'webp', 'heic', 'heif', 'avif', 'bmp', 'tif', 'tiff', 'svg', 'dng', 'cr2', 'cr3', 'nef', 'arw', 'orf', 'rw2', 'raf']);\nconst VIDEO_EXT = new Set(['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', 'wmv', 'flv', '3gp', '3g2', 'mpg', 'mpeg', 'ts', 'mts', 'm2ts', 'ogv', 'vob', 'f4v']);\n\nfunction extOf(name) {\n  const i = name ? name.lastIndexOf('.') : -1;\n  return i > 0 ? name.slice(i + 1).toLowerCase() : '';\n}\n\n/** 'folder' | 'photo' | 'video' | 'other' */\nfunction kindOf(rec) {\n  if (rec.t === 1) return 'folder';\n  const e = extOf(rec.n);\n  if (PHOTO_EXT.has(e)) return 'photo';\n  if (VIDEO_EXT.has(e)) return 'video';\n  if (rec.d && rec.w) return 'video'; // media attrs with a picture size, unknown extension\n  return 'other';\n}\n\nfunction mimeOf(name) {\n  const e = extOf(name);\n  return ({\n    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', '3gp': 'video/3gpp', webm: 'video/webm', mkv: 'video/webm',\n    ogv: 'video/ogg', ts: 'video/mp2t', avi: 'video/x-msvideo',\n    jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg', png: 'image/png', gif: 'image/gif',\n    webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml',\n    tif: 'image/tiff', tiff: 'image/tiff',\n  })[e] || 'application/octet-stream';\n}\n\n// idb.js — tiny IndexedDB helper shared by page, worker and service worker.\n// Every call degrades to a no-op when IndexedDB is unavailable (private mode,\n// some file:// contexts), so the app keeps working, just without caching.\n//\n// Stores:\n//   listings  {id: cacheId, root, nodes, needsKey, at}  decrypted folder trees\n//   thumbs    {id: nodeHandle, b: ArrayBuffer | none: 1, at}  server thumbnails (type 0)\n//   streams   {id: nodeHandle, folder, key, size, name, mime}  what the SW needs to stream a file\n\nconst IDB_NAME = 'mega-gallery';\nconst IDB_VERSION = 1;\nlet idbPromise = null;\n\nfunction idbOpen() {\n  if (idbPromise) return idbPromise;\n  idbPromise = new Promise((resolve) => {\n    let req;\n    try {\n      req = indexedDB.open(IDB_NAME, IDB_VERSION);\n    } catch {\n      return resolve(null);\n    }\n    req.onupgradeneeded = () => {\n      const db = req.result;\n      if (!db.objectStoreNames.contains('listings')) db.createObjectStore('listings', { keyPath: 'id' });\n      if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs', { keyPath: 'id' }).createIndex('at', 'at');\n      if (!db.objectStoreNames.contains('streams')) db.createObjectStore('streams', { keyPath: 'id' });\n    };\n    req.onsuccess = () => {\n      const db = req.result;\n      db.onversionchange = () => db.close();\n      resolve(db);\n    };\n    req.onerror = () => resolve(null);\n    req.onblocked = () => resolve(null);\n  });\n  return idbPromise;\n}\n\nfunction idbRun(store, mode, fn) {\n  return idbOpen().then((db) => new Promise((resolve) => {\n    if (!db) return resolve(undefined);\n    let result;\n    try {\n      const tx = db.transaction(store, mode);\n      result = fn(tx.objectStore(store));\n      tx.oncomplete = () => resolve(typeof result === 'function' ? result() : result);\n      tx.onerror = tx.onabort = () => resolve(undefined);\n    } catch {\n      resolve(undefined);\n    }\n  }));\n}\n\nfunction idbGet(store, key) {\n  return idbRun(store, 'readonly', (s) => {\n    const r = s.get(key);\n    return () => r.result;\n  });\n}\n\nfunction idbGetMany(store, keys) {\n  return idbRun(store, 'readonly', (s) => {\n    const reqs = keys.map((k) => s.get(k));\n    return () => reqs.map((r) => r.result);\n  }).then((v) => v || keys.map(() => undefined));\n}\n\nfunction idbPut(store, value) {\n  return idbRun(store, 'readwrite', (s) => { s.put(value); });\n}\n\nfunction idbPutMany(store, values) {\n  return idbRun(store, 'readwrite', (s) => { for (const v of values) s.put(v); });\n}\n\nfunction idbDelete(store, key) {\n  return idbRun(store, 'readwrite', (s) => { s.delete(key); });\n}\n\nfunction idbClear(store) {\n  return idbRun(store, 'readwrite', (s) => { s.clear(); });\n}\n\nfunction idbCount(store) {\n  return idbRun(store, 'readonly', (s) => {\n    const r = s.count();\n    return () => r.result || 0;\n  }).then((v) => v || 0);\n}\n\n/** Keep the thumbnail cache bounded: drop the oldest entries beyond `max`. */\nasync function idbTrimThumbs(max) {\n  const n = await idbCount('thumbs');\n  if (n <= max) return 0;\n  let toDrop = n - Math.floor(max * 0.85);\n  const dropped = toDrop;\n  await idbRun('thumbs', 'readwrite', (s) => {\n    const cur = s.index('at').openKeyCursor();\n    cur.onsuccess = () => {\n      const c = cur.result;\n      if (!c || toDrop <= 0) return;\n      s.delete(c.primaryKey);\n      toDrop--;\n      c.continue();\n    };\n  });\n  return dropped;\n}\n\n// worker.js — Web Worker: folder walks, thumbnail fetch/decrypt/cache, previews,\n// and the no-service-worker fallback download. Keeps all crypto and JSON parsing\n// of large listings off the main thread. Uses symbols from core.js and idb.js.\n// Can also run in-page (same code, `self` shimmed) if a Worker can't be created.\n\nconst api = new MegaApi({ maxConcurrent: 3 });\nconst jobs = new Map(); // job -> AbortController\nconst post = (msg, transfer) => self.postMessage(msg, transfer || []);\n\nconst THUMB_CACHE_MAX = 30000; // ~300–400 MB worst case; oldest dropped first\nconst BATCH_MAX = 120;          // handles per POST (latency is flat in batch size)\nconst MAX_ACTIVE = 6;           // concurrent attribute POSTs (each to a different cluster)\nconst CLUSTER_URL_TTL = 15 * 60 * 1000;\n\nself.onmessage = (e) => {\n  const m = e.data;\n  handle(m).catch((err) => {\n    if (m.req) post({ type: 'res', req: m.req, error: String(err && err.message || err) });\n  });\n};\n\nasync function handle(m) {\n  switch (m.type) {\n    case 'ping': return post({ type: 'pong' });\n    case 'list': return doList(m);\n    case 'cancel': { const ac = jobs.get(m.job); if (ac) ac.abort(); return; }\n    case 'cached': return doCached(m);\n    case 'forget': await idbDelete('listings', m.cid); return;\n    case 'thumbs': return setWanted(m.want);\n    case 'preview': return doPreview(m);\n    case 'full': return doFull(m);\n    case 'cacheStats': return post({ type: 'res', req: m.req, thumbs: await idbCount('thumbs') });\n    case 'clearThumbs': await idbClear('thumbs'); return post({ type: 'res', req: m.req, ok: true });\n  }\n}\n\n// ------------------------------------------------------------ tree walk\nasync function doList(m) {\n  const ac = new AbortController();\n  jobs.set(m.job, ac);\n  try {\n    let last = 0;\n    const res = await listFolder(api, m.link, {\n      signal: ac.signal,\n      onProgress: (p) => {\n        const now = Date.now();\n        if (p.phase !== 'decrypt' || now - last > 120) { last = now; post({ type: 'progress', job: m.job, ...p }); }\n      },\n    });\n    const data = { id: m.cid, root: res.root, nodes: res.nodes, needsKey: res.needsKey, at: Date.now() };\n    post({ type: 'listed', job: m.job, cid: m.cid, data });\n    idbPut('listings', data);\n  } catch (err) {\n    post({ type: 'listError', job: m.job, cid: m.cid, error: String(err.message || err), code: err.code, aborted: err.name === 'AbortError' });\n  } finally {\n    jobs.delete(m.job);\n  }\n}\n\nasync function doCached(m) {\n  const rows = await idbGetMany('listings', m.cids);\n  post({ type: 'res', req: m.req, rows: rows.map((r) => r || null) });\n}\n\n// ------------------------------------------------------------ thumbnails\n// The page sends its full \"want list\" (visible tiles first, then prefetch) whenever\n// the viewport settles. We serve IndexedDB hits immediately, then fetch misses from\n// MEGA in per-cluster batches, highest-priority cluster first.\nconst T = {\n  wanted: new Map(),   // id -> item, in priority order\n  lookup: new Set(),   // ids with an IDB lookup in flight\n  pending: new Map(),  // id -> item waiting for network\n  inflight: new Set(),\n  busy: new Set(),     // cluster keys with a POST in flight\n  active: 0,\n  urls: new Map(),     // cluster key -> {servers, at}\n};\n\nasync function setWanted(list) {\n  T.wanted = new Map(list.map((it) => [it.id, it]));\n  const check = list.filter((it) => !T.lookup.has(it.id) && !T.pending.has(it.id) && !T.inflight.has(it.id));\n  if (check.length) {\n    for (const it of check) T.lookup.add(it.id);\n    const rows = await idbGetMany('thumbs', check.map((it) => it.id));\n    check.forEach((it, i) => {\n      T.lookup.delete(it.id);\n      const row = rows[i];\n      if (row && row.b) post({ type: 'thumb', id: it.id, buf: row.b, cached: true }, [row.b]);\n      else if (row && row.none) post({ type: 'thumb', id: it.id, none: true });\n      else T.pending.set(it.id, it);\n    });\n  }\n  pump();\n}\n\nfunction pump() {\n  while (T.active < MAX_ACTIVE) {\n    const groups = new Map();\n    let best = null;\n    for (const id of T.wanted.keys()) {\n      const it = T.pending.get(id);\n      if (!it) continue;\n      const ck = it.folder + ':' + it.c;\n      if (T.busy.has(ck)) continue;\n      let g = groups.get(ck);\n      if (!g) { groups.set(ck, (g = [])); if (!best) best = ck; }\n      if (g.length < BATCH_MAX) g.push(it);\n    }\n    if (!best) return;\n    const items = groups.get(best);\n    for (const it of items) { T.pending.delete(it.id); T.inflight.add(it.id); }\n    T.busy.add(best);\n    T.active++;\n    runBatch(best, items).finally(() => {\n      T.busy.delete(best);\n      T.active--;\n      pump();\n    });\n  }\n}\n\nasync function clusterServers(ck, folder, fah, fresh) {\n  const hit = T.urls.get(ck);\n  if (!fresh && hit && Date.now() - hit.at < CLUSTER_URL_TTL) return hit.servers;\n  const servers = await faServers(api, folder, fah);\n  T.urls.set(ck, { servers, at: Date.now() });\n  return servers;\n}\n\nasync function runBatch(ck, items) {\n  let got = null;\n  for (let attempt = 0; attempt < 2 && !got; attempt++) {\n    try {\n      const servers = await clusterServers(ck, items[0].folder, items[0].fah, attempt > 0);\n      got = await postFileAttributes(servers, 0, items.map((it) => ({ id: it.id, fah: it.fah, key: it.k })));\n    } catch (err) {\n      console.warn('[mega-gallery worker] thumbnail batch failed', ck, err);\n      T.urls.delete(ck);\n      if (attempt === 0) await sleep(700 + Math.random() * 600);\n    }\n  }\n  const now = Date.now();\n  const puts = [];\n  for (const it of items) {\n    T.inflight.delete(it.id);\n    if (!got) { post({ type: 'thumb', id: it.id, error: true }); continue; }\n    const data = got.get(it.id);\n    if (data && data.length) {\n      const buf = data.slice().buffer;\n      puts.push({ id: it.id, b: buf.slice(0), at: now });\n      post({ type: 'thumb', id: it.id, buf }, [buf]);\n    } else {\n      puts.push({ id: it.id, none: 1, at: now });\n      post({ type: 'thumb', id: it.id, none: true });\n    }\n  }\n  if (puts.length) {\n    await idbPutMany('thumbs', puts);\n    if (Math.random() < 0.05) idbTrimThumbs(THUMB_CACHE_MAX);\n  }\n}\n\n// ------------------------------------------------------------ previews (type 1, ~1000px) — transient, not cached\nasync function doPreview(m) {\n  const ck = m.folder + ':' + m.c;\n  let got = null, lastErr = null;\n  for (let attempt = 0; attempt < 2 && !got; attempt++) {\n    try {\n      const servers = await clusterServers(ck, m.folder, m.fah, attempt > 0);\n      got = await postFileAttributes(servers, 1, [{ id: m.id, fah: m.fah, key: m.k }]);\n    } catch (err) { lastErr = err; }\n  }\n  const data = got && got.get(m.id);\n  if (data && data.length) {\n    const buf = data.slice().buffer;\n    post({ type: 'res', req: m.req, buf }, [buf]);\n  } else {\n    post({ type: 'res', req: m.req, error: lastErr ? String(lastErr.message) : 'No preview' });\n  }\n}\n\n// ------------------------------------------------------------ fallback full download (no service worker)\n// Only used when streaming via the service worker isn't possible (file://, SW blocked).\n// Downloads in 4 MB ranges, decrypts with AES-CTR, returns one ArrayBuffer.\nasync function doFull(m) {\n  const ac = new AbortController();\n  jobs.set(m.req, ac);\n  try {\n    const { url } = await getDownloadUrl(api, m.folder, m.id, { signal: ac.signal });\n    const ctx = fileCtrParams(m.k);\n    const out = new Uint8Array(m.size);\n    const CH = 4 * 1024 * 1024;\n    for (let pos = 0; pos < m.size; pos += CH) {\n      const end = Math.min(m.size, pos + CH) - 1;\n      const r = await fetch(`${url}/${pos}-${end}`, { signal: ac.signal });\n      if (r.status === 509) throw new MegaError(-17, 'MEGA bandwidth limit reached');\n      if (!r.ok) throw new Error(`Download HTTP ${r.status}`);\n      const ct = new Uint8Array(await r.arrayBuffer());\n      out.set(await ctrDecrypt(ctx, pos, ct), pos);\n      post({ type: 'fullProgress', req: m.req, loaded: end + 1, total: m.size });\n    }\n    post({ type: 'res', req: m.req, buf: out.buffer }, [out.buffer]);\n  } finally {\n    jobs.delete(m.req);\n  }\n}\n";
+/** Total bytes held by the encrypted block cache (sums the `n` index keys; no values are read). */
+function idbSumBlocks() {
+  return idbRun('blocks', 'readonly', (s) => {
+    let sum = 0;
+    const cur = s.index('n').openKeyCursor();
+    cur.onsuccess = () => { const c = cur.result; if (!c) return; sum += c.key || 0; c.continue(); };
+    return () => sum;
+  }).then((v) => v || 0);
+}
+
+/** Evict oldest blocks until the cache holds at most `maxBytes`. Returns the number dropped. */
+async function idbTrimBlocks(maxBytes) {
+  let dropped = 0;
+  await idbRun('blocks', 'readwrite', (s) => {
+    let sum = 0;
+    const cur = s.index('atn').openKeyCursor(null, 'prev'); // newest first
+    cur.onsuccess = () => {
+      const c = cur.result;
+      if (!c) return;
+      sum += c.key[1] || 0;
+      if (sum > maxBytes) { s.delete(c.primaryKey); dropped++; }
+      c.continue();
+    };
+  });
+  return dropped;
+}
+
+const WORKER_SRC = "'use strict';\n// core.js — shared MEGA client code.\n// Runs unchanged in: the page, the walker/thumbnail Web Worker, the streaming\n// Service Worker, and Node (for tests). The build strips `export` and inlines it.\n//\n// Logic follows megajs v1.3 (API request + hashcash, key/attribute handling) and\n// MEGA's own webclient (file-attribute/thumbnail protocol, media attributes).\n\n// ---------------------------------------------------------------- base64url\nconst B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst B64_LUT = new Int16Array(128).fill(-1);\nfor (let i = 0; i < 64; i++) B64_LUT[B64_CHARS.charCodeAt(i)] = i;\nB64_LUT[43] = 62; // '+'\nB64_LUT[47] = 63; // '/'\n\nfunction b64dec(s) {\n  const out = new Uint8Array(((s.length * 3) >> 2) + 3);\n  let n = 0, buf = 0, bits = 0;\n  for (let i = 0; i < s.length; i++) {\n    const c = s.charCodeAt(i);\n    const v = c < 128 ? B64_LUT[c] : -1;\n    if (v < 0) continue;\n    buf = ((buf << 6) | v) & 0xffffff;\n    bits += 6;\n    if (bits >= 8) { bits -= 8; out[n++] = (buf >> bits) & 255; }\n  }\n  return out.slice(0, n);\n}\n\nfunction b64enc(u8) {\n  const C = B64_CHARS;\n  let s = '', i = 0;\n  for (; i + 2 < u8.length; i += 3) {\n    const v = (u8[i] << 16) | (u8[i + 1] << 8) | u8[i + 2];\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63] + C[(v >> 6) & 63] + C[v & 63];\n  }\n  if (u8.length - i === 1) {\n    const v = u8[i] << 16;\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63];\n  } else if (u8.length - i === 2) {\n    const v = (u8[i] << 16) | (u8[i + 1] << 8);\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63] + C[(v >> 6) & 63];\n  }\n  return s;\n}\n\nconst UTF8 = new TextDecoder();\n\n// ---------------------------------------------------------------- AES-128 (pure JS)\n// Table-based AES after SJCL. Synchronous and allocation-free per block, which\n// beats WebCrypto for the thousands of tiny ECB/CBC operations a folder needs.\nconst AES_T = (() => {\n  const enc = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint8Array(256)];\n  const dec = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint8Array(256)];\n  const sbox = enc[4], sboxInv = dec[4];\n  const d = new Uint8Array(256), th = new Uint8Array(256);\n  for (let i = 0; i < 256; i++) th[(d[i] = (i << 1) ^ ((i >> 7) * 283)) ^ i] = i;\n  let x, xInv, x2, x4, x8, s, tEnc, tDec;\n  for (x = xInv = 0; !sbox[x]; x ^= x2 || 1, xInv = th[xInv] || 1) {\n    s = xInv ^ (xInv << 1) ^ (xInv << 2) ^ (xInv << 3) ^ (xInv << 4);\n    s = (s >> 8) ^ (s & 255) ^ 99;\n    sbox[x] = s;\n    sboxInv[s] = x;\n    x8 = d[(x4 = d[(x2 = d[x])])];\n    tDec = (x8 * 0x1010101) ^ (x4 * 0x10001) ^ (x2 * 0x101) ^ (x * 0x1010100);\n    tEnc = (d[s] * 0x101) ^ (s * 0x1010100);\n    for (let i = 0; i < 4; i++) {\n      enc[i][x] = tEnc = (tEnc << 24) ^ (tEnc >>> 8);\n      dec[i][s] = tDec = (tDec << 24) ^ (tDec >>> 8);\n    }\n  }\n  return [enc, dec];\n})();\n\nclass AES {\n  constructor(key) {\n    if (!key || key.length !== 16) throw new Error('AES key must be 16 bytes');\n    const sbox = AES_T[0][4], decT = AES_T[1];\n    const ek = new Int32Array(44), dk = new Int32Array(44);\n    for (let i = 0; i < 4; i++) ek[i] = (key[4 * i] << 24) | (key[4 * i + 1] << 16) | (key[4 * i + 2] << 8) | key[4 * i + 3];\n    let i, j, tmp, rcon = 1;\n    for (i = 4; i < 44; i++) {\n      tmp = ek[i - 1];\n      if (i % 4 === 0) {\n        tmp = (sbox[tmp >>> 24] << 24) ^ (sbox[(tmp >> 16) & 255] << 16) ^ (sbox[(tmp >> 8) & 255] << 8) ^ sbox[tmp & 255];\n        tmp = (tmp << 8) ^ (tmp >>> 24) ^ (rcon << 24);\n        rcon = (rcon << 1) ^ ((rcon >> 7) * 283);\n      }\n      ek[i] = ek[i - 4] ^ tmp;\n    }\n    for (j = 0; i; j++, i--) {\n      tmp = ek[j & 3 ? i : i - 4];\n      dk[j] = i <= 4 || j < 4 ? tmp\n        : decT[0][sbox[tmp >>> 24]] ^ decT[1][sbox[(tmp >> 16) & 255]] ^ decT[2][sbox[(tmp >> 8) & 255]] ^ decT[3][sbox[tmp & 255]];\n    }\n    this.k = [ek, dk];\n    this.w = new Int32Array(4);\n    this.o = new Int32Array(4);\n  }\n\n  _crypt(dir) {\n    const inp = this.w, out = this.o, key = this.k[dir], T = AES_T[dir];\n    const t0 = T[0], t1 = T[1], t2 = T[2], t3 = T[3], sbox = T[4];\n    let a = inp[0] ^ key[0], b = inp[dir ? 3 : 1] ^ key[1], c = inp[2] ^ key[2], d = inp[dir ? 1 : 3] ^ key[3];\n    let a2, b2, c2, k = 4;\n    for (let r = 0; r < 9; r++) {\n      a2 = t0[a >>> 24] ^ t1[(b >> 16) & 255] ^ t2[(c >> 8) & 255] ^ t3[d & 255] ^ key[k];\n      b2 = t0[b >>> 24] ^ t1[(c >> 16) & 255] ^ t2[(d >> 8) & 255] ^ t3[a & 255] ^ key[k + 1];\n      c2 = t0[c >>> 24] ^ t1[(d >> 16) & 255] ^ t2[(a >> 8) & 255] ^ t3[b & 255] ^ key[k + 2];\n      d = t0[d >>> 24] ^ t1[(a >> 16) & 255] ^ t2[(b >> 8) & 255] ^ t3[c & 255] ^ key[k + 3];\n      k += 4; a = a2; b = b2; c = c2;\n    }\n    for (let r = 0; r < 4; r++) {\n      out[dir ? 3 & -r : r] = (sbox[a >>> 24] << 24) ^ (sbox[(b >> 16) & 255] << 16) ^ (sbox[(c >> 8) & 255] << 8) ^ sbox[d & 255] ^ key[k++];\n      a2 = a; a = b; b = c; c = d; d = a2;\n    }\n  }\n\n  _load(u8, off) {\n    const w = this.w;\n    for (let i = 0; i < 4; i++, off += 4) w[i] = (u8[off] << 24) | (u8[off + 1] << 16) | (u8[off + 2] << 8) | u8[off + 3];\n  }\n\n  _store(u8, off) {\n    const o = this.o;\n    for (let i = 0; i < 4; i++, off += 4) {\n      const v = o[i];\n      u8[off] = v >>> 24; u8[off + 1] = (v >> 16) & 255; u8[off + 2] = (v >> 8) & 255; u8[off + 3] = v & 255;\n    }\n  }\n\n  /** In-place ECB decrypt (MEGA uses this to unwrap node keys). */\n  decryptECB(u8) {\n    for (let off = 0; off + 16 <= u8.length; off += 16) { this._load(u8, off); this._crypt(1); this._store(u8, off); }\n    return u8;\n  }\n\n  encryptECB(u8) {\n    for (let off = 0; off + 16 <= u8.length; off += 16) { this._load(u8, off); this._crypt(0); this._store(u8, off); }\n    return u8;\n  }\n\n  /** In-place CBC decrypt, zero IV, no padding (node attributes and thumbnails). */\n  decryptCBC(u8) {\n    let p0 = 0, p1 = 0, p2 = 0, p3 = 0;\n    const w = this.w, o = this.o;\n    for (let off = 0; off + 16 <= u8.length; off += 16) {\n      this._load(u8, off);\n      const c0 = w[0], c1 = w[1], c2 = w[2], c3 = w[3];\n      this._crypt(1);\n      o[0] ^= p0; o[1] ^= p1; o[2] ^= p2; o[3] ^= p3;\n      this._store(u8, off);\n      p0 = c0; p1 = c1; p2 = c2; p3 = c3;\n    }\n    return u8;\n  }\n}\n\n// ---------------------------------------------------------------- keys & attributes\n/** 32-byte file key -> 16-byte AES key (k[0..15] XOR k[16..31]); folder keys pass through. */\nfunction nodeAesKey(k) {\n  if (k.length !== 32) return k;\n  const out = new Uint8Array(16);\n  for (let i = 0; i < 16; i++) out[i] = k[i] ^ k[i + 16];\n  return out;\n}\n\n/** Decrypt a node's `a` attribute blob. Returns {n, c, ...} or null when the key is wrong. */\nfunction decryptAttrs(aB64, key16) {\n  if (!aB64) return null;\n  const buf = b64dec(aB64);\n  if (!buf.length || buf.length % 16) return null;\n  new AES(key16).decryptCBC(buf);\n  let end = buf.length;\n  while (end > 0 && buf[end - 1] === 0) end--;\n  // 'MEGA{\"'\n  if (buf[0] !== 77 || buf[1] !== 69 || buf[2] !== 71 || buf[3] !== 65 || buf[4] !== 123 || buf[5] !== 34) return null;\n  const json = UTF8.decode(buf.subarray(4, end));\n  try {\n    return JSON.parse(json);\n  } catch {\n    const m = json.match(/\"n\"\\s*:\\s*\"((?:\\\\\"|[^\"])*)\"/);\n    return m ? { n: m[1] } : { n: 'MALFORMED_ATTRIBUTES' };\n  }\n}\n\n/** Original file mtime (unix seconds) encoded in the fingerprint attribute `c`. */\nfunction fingerprintMtime(c) {\n  if (typeof c !== 'string' || c.length < 24) return 0;\n  const b = b64dec(c);\n  if (b.length < 18) return 0;\n  const len = b[16];\n  if (!len || len > 8 || b.length < 17 + len) return 0;\n  let t = 0;\n  for (let i = len - 1; i >= 0; i--) t = t * 256 + b[17 + i];\n  // Reject nonsense (before 1980 or more than a year in the future).\n  return t > 315532800 && t < Date.now() / 1000 + 31536000 ? t : 0;\n}\n\n/** Parse a node's `fa` string (\"924:0*AbCd…/924:1*EfGh…/…:8*…\"). */\nfunction parseFa(fa) {\n  const r = {};\n  if (!fa) return r;\n  const re = /(\\d+):(\\d+)\\*([\\w-]+)/g;\n  let m;\n  while ((m = re.exec(fa))) {\n    const type = +m[2];\n    if (type === 0) r.thumb = { c: m[1], h: m[3] };\n    else if (type === 1) r.preview = { c: m[1], h: m[3] };\n  }\n  return r;\n}\n\n// XXTEA (media attributes, type 8/9 inside `fa`) — ported from MEGA webclient nodedec.js\nfunction xxteaDecrypt(v, k) {\n  const DELTA = 0x9e3779b9;\n  const int32 = (i) => i & 0xffffffff;\n  const mx = (sum, y, z, p, e) => (((z >>> 5) ^ (y << 2)) + ((y >>> 3) ^ (z << 4))) ^ ((sum ^ y) + (k[(p & 3) ^ e] ^ z));\n  const n = v.length - 1;\n  let y = v[0], z, sum, e, p;\n  const q = Math.floor(6 + 52 / v.length);\n  for (sum = int32(q * DELTA); sum !== 0; sum = int32(sum - DELTA)) {\n    e = (sum >>> 2) & 3;\n    for (p = n; p > 0; --p) {\n      z = v[p - 1];\n      y = v[p] = int32(v[p] - mx(sum, y, z, p, e));\n    }\n    z = v[n];\n    y = v[0] = int32(v[0] - mx(sum, y, z, 0, e));\n  }\n  return v;\n}\n\n/** Decode width/height/fps/duration from the inline `:8*` media attribute. Zero network. */\nfunction decodeMediaAttrs(fa, key32) {\n  if (!fa || !key32 || key32.length !== 32) return null;\n  const pos = fa.indexOf(':8*');\n  if (pos < 0) return null;\n  const raw = b64dec(fa.substr(pos + 3, 11));\n  if (raw.length < 8) return null;\n  const v = new Uint32Array(2);\n  v[0] = raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24);\n  v[1] = raw[4] | (raw[5] << 8) | (raw[6] << 16) | (raw[7] << 24);\n  const k = new Uint32Array(4);\n  for (let i = 0; i < 4; i++) {\n    const o = 16 + i * 4;\n    k[i] = (key32[o] << 24) | (key32[o + 1] << 16) | (key32[o + 2] << 8) | key32[o + 3];\n  }\n  xxteaDecrypt(v, k);\n  const b = new Uint8Array(8);\n  for (let i = 0; i < 2; i++) {\n    b[i * 4] = v[i] & 255; b[i * 4 + 1] = (v[i] >>> 8) & 255; b[i * 4 + 2] = (v[i] >>> 16) & 255; b[i * 4 + 3] = v[i] >>> 24;\n  }\n  let width = (b[0] >> 1) + ((b[1] & 127) << 7);\n  if (b[0] & 1) width = (width << 3) + 16384;\n  let height = b[2] + ((b[3] & 63) << 8);\n  if (b[1] & 128) height = (height << 3) + 16384;\n  let fps = (b[3] >> 7) + ((b[4] & 63) << 1);\n  if (b[3] & 64) fps = (fps << 3) + 128;\n  let playtime = (b[4] >> 7) + (b[5] << 1) + (b[6] << 9);\n  if (b[4] & 64) playtime = playtime * 60 + 131100;\n  return { width, height, fps, playtime };\n}\n\n// ---------------------------------------------------------------- links\nclass LinkError extends Error {}\n\n/**\n * Normalise a pasted MEGA folder link. Accepts:\n *   https://mega.nz/folder/ID#KEY            (+ /folder/SUB or /file/FILE suffix)\n *   https://mega.nz/#F!ID!KEY                (+ !SUB)\n *   mega.co.nz / www. variants, missing scheme, surrounding text/quotes/<>,\n *   links with no key (key can be supplied later).\n */\nfunction parseMegaLink(input) {\n  let s = String(input || '').trim();\n  if (!s) throw new LinkError('Paste a MEGA folder link.');\n  // Pull the first mega URL out of surrounding text.\n  const m = s.match(/(?:https?:\\/\\/)?(?:www\\.)?mega(?:\\.co)?\\.nz\\/[^\\s\"'<>]+/i) || s.match(/#?F![\\w-]+(?:![\\w-]*)*/);\n  if (m) s = m[0];\n  s = s.replace(/\\s+/g, '').replace(/[)\\].,;]+$/, '');\n  try { s = decodeURIComponent(s); } catch { /* keep as-is */ }\n\n  let id, key = null, sub = null;\n  let mm;\n  if ((mm = s.match(/\\/(file|folder|embed)\\/([\\w-]+)(?:#([\\w-]*))?(.*)$/i))) {\n    if (mm[1].toLowerCase() !== 'folder') throw new LinkError('That is a single-file link. Paste a folder link (mega.nz/folder/…).');\n    id = mm[2];\n    key = mm[3] || null;\n    const rest = mm[4] || '';\n    const subm = rest.match(/\\/folder\\/([\\w-]+)/i);\n    if (subm) sub = subm[1];\n  } else if ((mm = s.match(/#?(F?)!([\\w-]+)(?:!([\\w-]*))?(?:!([\\w-]+))?/))) {\n    if (!mm[1]) throw new LinkError('That is a single-file link. Paste a folder link (#F!…).');\n    id = mm[2];\n    key = mm[3] || null;\n    sub = mm[4] || null;\n  } else {\n    throw new LinkError('Not a MEGA folder link. Expected mega.nz/folder/ID#KEY or mega.nz/#F!ID!KEY.');\n  }\n  if (!/^[\\w-]{8}$/.test(id)) throw new LinkError(`Folder ID \"${id}\" should be 8 characters.`);\n  if (key !== null && !/^[\\w-]{22}$/.test(key)) throw new LinkError(`Decryption key should be 22 characters (got ${key.length}).`);\n  if (sub !== null && !/^[\\w-]{8}$/.test(sub)) sub = null;\n  return { id, key, sub, url: canonicalLink(id, key, sub) };\n}\n\nfunction canonicalLink(id, key, sub) {\n  return `https://mega.nz/folder/${id}${key ? '#' + key : ''}${sub ? '/folder/' + sub : ''}`;\n}\n\n// ---------------------------------------------------------------- API\nconst API_ERRORS = {\n  '-1': 'MEGA internal error', '-2': 'Invalid request', '-3': 'MEGA is busy, try again',\n  '-4': 'Rate limited by MEGA, slow down', '-6': 'Too many requests', '-8': 'Link expired',\n  '-9': 'Not found: the folder was deleted or the link is wrong', '-11': 'Access denied',\n  '-14': 'Wrong decryption key', '-15': 'Session expired', '-16': 'This link was taken down or blocked',\n  '-17': 'Transfer quota exceeded', '-18': 'Temporarily unavailable', '-19': 'Too many connections',\n};\n\nclass MegaError extends Error {\n  constructor(code, extra) {\n    super((API_ERRORS[code] || `MEGA error ${code}`) + (extra ? ` (${extra})` : ''));\n    this.code = code;\n  }\n}\n\nfunction sleep(ms, signal) {\n  return new Promise((resolve, reject) => {\n    if (signal && signal.aborted) return reject(new DOMException('Aborted', 'AbortError'));\n    const t = setTimeout(resolve, ms);\n    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });\n  });\n}\n\n// Port of megajs generateHashcashToken (MEGA's anti-abuse proof-of-work).\nasync function solveHashcash(challenge) {\n  const [versionStr, easinessStr, , tokenStr] = challenge.split(':');\n  if (Number(versionStr) !== 1) throw new Error('Unsupported MEGA hashcash challenge');\n  const easiness = Number(easinessStr);\n  const base = ((easiness & 63) << 1) + 1;\n  const shifts = (easiness >> 6) * 7 + 3;\n  const threshold = base << shifts;\n  const token = b64dec(tokenStr);\n  const buffer = new Uint8Array(4 + 262144 * 48);\n  for (let i = 0; i < 262144; i++) buffer.set(token, 4 + i * 48);\n  for (;;) {\n    const view = new DataView(await crypto.subtle.digest('SHA-256', buffer));\n    if (view.getUint32(0) <= threshold) return `1:${tokenStr}:${b64enc(buffer.slice(0, 4))}`;\n    let j = 0;\n    for (;;) { buffer[j]++; if (buffer[j++]) break; }\n  }\n}\n\n/** Minimal MEGA API client: request sequencing, polite concurrency, EAGAIN backoff, hashcash. */\nclass MegaApi {\n  constructor(opts = {}) {\n    this.gateway = opts.gateway || 'https://g.api.mega.co.nz/';\n    this.seq = Math.floor(Math.random() * 1e9);\n    this.max = opts.maxConcurrent || 3;\n    this.active = 0;\n    this.waiters = [];\n  }\n\n  async req(payload, opts = {}) {\n    if (this.active >= this.max) await new Promise((r) => this.waiters.push(r));\n    this.active++;\n    try { return await this._req(payload, opts); } finally {\n      this.active--;\n      const next = this.waiters.shift();\n      if (next) next();\n    }\n  }\n\n  async _req(payload, { n, signal } = {}) {\n    let hashcash = null, busy = 0, netRetry = false, hcTries = 0;\n    for (;;) {\n      const qs = `id=${++this.seq}${n ? '&n=' + encodeURIComponent(n) : ''}`;\n      const headers = { 'Content-Type': 'application/json' };\n      if (hashcash) headers['X-Hashcash'] = hashcash;\n      let res;\n      try {\n        res = await fetch(`${this.gateway}cs?${qs}`, { method: 'POST', headers, body: JSON.stringify([payload]), signal });\n      } catch (e) {\n        if (e.name === 'AbortError' || (signal && signal.aborted)) throw e;\n        if (netRetry) throw new Error(`Network error talking to MEGA (${e.message})`);\n        netRetry = true; // retry-once for plain network failures\n        await sleep(1200, signal);\n        continue;\n      }\n      const challenge = res.headers.get('X-Hashcash');\n      if (challenge && hcTries++ < 3) { hashcash = await solveHashcash(challenge); continue; }\n      if (res.status >= 500 || res.status === 429) {\n        if (busy++ < 4) { await sleep(600 * 2 ** busy + Math.random() * 400, signal); continue; }\n        throw new Error(`MEGA API unavailable (HTTP ${res.status})`);\n      }\n      if (!res.ok) throw new Error(`MEGA API HTTP ${res.status}`);\n      const json = await res.json();\n      const r = Array.isArray(json) ? json[0] : json;\n      if (typeof r === 'number' && r < 0) {\n        if ((r === -3 || r === -4 || r === -6) && busy++ < 5) { await sleep(500 * 2 ** busy + Math.random() * 500, signal); continue; }\n        throw new MegaError(r);\n      }\n      return r;\n    }\n  }\n}\n\n// ---------------------------------------------------------------- folder listing\n/**\n * One `f` call with r:1 returns the whole tree under a public folder link.\n * Decrypts keys/attributes in slices, yielding between slices.\n * Returns compact records: {h,p,t,s,ts,mt,n,k,fa,d,w,hh}\n */\nasync function listFolder(api, link, { signal, onProgress } = {}) {\n  onProgress && onProgress({ phase: 'fetch' });\n  const resp = await api.req({ a: 'f', c: 1, ca: 1, r: 1 }, { n: link.id, signal });\n  const f = (resp && resp.f) || [];\n  if (!f.length) throw new MegaError(-9);\n  return decryptListing(f, link, { signal, onProgress });\n}\n\nasync function decryptListing(f, link, { signal, onProgress } = {}) {\n  const shareAes = link.key ? new AES(b64dec(link.key)) : null;\n  const root = f.find((n) => typeof n.k === 'string' && n.k.split('/').some((p) => p.split(':')[0] === n.h)) || f.find((n) => n.t === 1) || f[0];\n  const out = [];\n  let badKey = 0, okKey = 0;\n  const SLICE = 1500;\n  for (let i = 0; i < f.length; i++) {\n    const n = f[i];\n    const rec = { h: n.h, p: n.h === root.h ? '' : n.p, t: n.t === 1 ? 1 : 0, s: n.s || 0, ts: n.ts || 0, mt: n.ts || 0, n: null };\n    if (shareAes && typeof n.k === 'string') {\n      const parts = n.k.split('/');\n      // Prefer the entry keyed by the share root.\n      parts.sort((a, b) => (b.startsWith(root.h + ':') ? 1 : 0) - (a.startsWith(root.h + ':') ? 1 : 0));\n      for (const part of parts) {\n        const kb = part.slice(part.indexOf(':') + 1);\n        if (!kb || kb.length >= 44) continue; // RSA-wrapped keys are for logged-in owners only\n        const k = b64dec(kb);\n        if (k.length !== 16 && k.length !== 32) continue;\n        shareAes.decryptECB(k);\n        const at = decryptAttrs(n.a, nodeAesKey(k));\n        if (at) {\n          rec.n = typeof at.n === 'string' ? at.n : '';\n          const mt = fingerprintMtime(at.c);\n          if (mt) rec.mt = mt;\n          if (k.length === 32) rec.k = b64enc(k);\n          if (n.fa && k.length === 32) {\n            const ma = decodeMediaAttrs(n.fa, k);\n            if (ma && ma.playtime) rec.d = ma.playtime;\n            if (ma && ma.width) { rec.w = ma.width; rec.hh = ma.height; }\n          }\n          break;\n        }\n      }\n      if (rec.n === null) badKey++; else okKey++;\n    }\n    if (n.fa) rec.fa = n.fa;\n    out.push(rec);\n    if (i % SLICE === SLICE - 1) {\n      onProgress && onProgress({ phase: 'decrypt', done: i + 1, total: f.length });\n      await sleep(0, signal);\n    }\n  }\n  if (shareAes && okKey === 0 && badKey > 0) throw new MegaError(-14);\n  let rootH = root.h;\n  let nodes = out;\n  if (link.sub && link.sub !== root.h) {\n    // Restrict to the subtree of a /folder/SUB link.\n    const kids = new Map();\n    for (const r of out) { if (!kids.has(r.p)) kids.set(r.p, []); kids.get(r.p).push(r); }\n    const subRec = out.find((r) => r.h === link.sub);\n    if (!subRec) throw new LinkError('Subfolder from the link was not found inside the folder.');\n    nodes = [];\n    const stack = [subRec];\n    while (stack.length) {\n      const r = stack.pop();\n      nodes.push(r);\n      const ch = kids.get(r.h);\n      if (ch) for (const c of ch) stack.push(c);\n    }\n    subRec.p = '';\n    rootH = subRec.h;\n  }\n  onProgress && onProgress({ phase: 'done', done: f.length, total: f.length });\n  return { root: rootH, nodes, needsKey: !shareAes };\n}\n\n// ---------------------------------------------------------------- file attributes (thumbnails / previews)\n/**\n * Fetch and decrypt server-generated thumbnails (type 0) or previews (type 1).\n * items: [{id, fah (b64 8-byte handle), key (b64 32-byte node key)}], all on the same fa cluster.\n * Many handles go in ONE POST; the reply is [8B handle][4B LE len][ciphertext]...\n * Returns Map(id -> Uint8Array JPEG).\n */\nasync function fetchFileAttributes(api, folderId, type, items, { signal } = {}) {\n  if (!items.length) return new Map();\n  const servers = await faServers(api, folderId, items[0].fah, { signal });\n  return postFileAttributes(servers, type, items, { signal });\n}\n\n/**\n * Ask the API which storage server holds a cluster's file attributes.\n * The URL is reusable for the same cluster (measured: still valid well after\n * first use), so callers cache it per folder+cluster and skip this round trip.\n */\nasync function faServers(api, folderId, fah, { signal } = {}) {\n  const res = await api.req({ a: 'ufa', fah, ssl: 2, r: 1 }, { n: folderId, signal });\n  if (!res || typeof res.p !== 'string') throw new Error('MEGA returned no file-attribute server');\n  const servers = [res.p];\n  for (let i = 0; typeof res['p' + i] === 'string'; i++) servers.push(res['p' + i]);\n  return servers;\n}\n\n/**\n * POST many 8-byte handles (same cluster!) to the attribute server(s) and decrypt the reply.\n * Server latency is ~1–1.5 s regardless of batch size, so batch generously.\n */\nasync function postFileAttributes(servers, type, items, { signal } = {}) {\n  const out = new Map();\n  const byHandle = new Map();\n  for (const it of items) {\n    const hb = b64dec(it.fah);\n    if (hb.length !== 8) continue;\n    const key = String.fromCharCode.apply(null, hb);\n    if (!byHandle.has(key)) byHandle.set(key, { hb, items: [] });\n    byHandle.get(key).items.push(it);\n  }\n  const groups = [...byHandle.values()];\n  if (!groups.length) return out;\n  // Split handles across the servers the API handed out (as the webclient does).\n  const per = Math.ceil(groups.length / servers.length);\n  await Promise.all(servers.map(async (srv, si) => {\n    const slice = groups.slice(si * per, (si + 1) * per);\n    if (!slice.length) return;\n    const body = new Uint8Array(slice.length * 8);\n    slice.forEach((g, i) => body.set(g.hb, i * 8));\n    const url = srv.replace(/^http:/, 'https:') + '/' + type;\n    const resp = await fetch(url, { method: 'POST', body, signal });\n    if (!resp.ok) throw new Error(`Thumbnail server HTTP ${resp.status}`);\n    const buf = new Uint8Array(await resp.arrayBuffer());\n    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);\n    let i = 0;\n    while (i + 12 <= buf.length) {\n      const hkey = String.fromCharCode.apply(null, buf.subarray(i, i + 8));\n      const len = dv.getUint32(i + 8, true);\n      i += 12;\n      if (i + len > buf.length) break;\n      const g = byHandle.get(hkey);\n      if (g && len && len % 16 === 0) {\n        for (const it of g.items) {\n          const data = buf.slice(i, i + len);\n          new AES(nodeAesKey(b64dec(it.key))).decryptCBC(data);\n          // Trim zero padding after the JPEG EOI marker when present.\n          let end = data.length;\n          while (end > 2 && data[end - 1] === 0) end--;\n          out.set(it.id, data.subarray(0, end));\n        }\n      }\n      i += len;\n    }\n  }));\n  return out;\n}\n\n// ---------------------------------------------------------------- file content (AES-CTR, ranged)\n/** Key material for ranged decryption: {aes: 16B key, nonce: 8B}. */\nfunction fileCtrParams(key32b64) {\n  const k = b64dec(key32b64);\n  return { aes: nodeAesKey(k), nonce: k.slice(16, 24) };\n}\n\n/** Counter block for byte offset `pos` (must be a multiple of 16). */\nfunction ctrBlock(nonce, pos) {\n  const iv = new Uint8Array(16);\n  iv.set(nonce, 0);\n  let block = Math.floor(pos / 16);\n  for (let i = 15; i >= 8; i--) { iv[i] = block % 256; block = Math.floor(block / 256); }\n  return iv;\n}\n\n/**\n * Decrypt `data` that starts at file offset `pos` (multiple of 16).\n * Uses native WebCrypto AES-CTR when available, pure JS otherwise (e.g. insecure file:// contexts).\n * `ctx` caches the imported CryptoKey: {aes, nonce, ck?, js?}\n */\nasync function ctrDecrypt(ctx, pos, data) {\n  const subtle = globalThis.crypto && globalThis.crypto.subtle;\n  if (subtle && !ctx.noSubtle) {\n    try {\n      if (!ctx.ck) ctx.ck = await subtle.importKey('raw', ctx.aes, 'AES-CTR', false, ['decrypt']);\n      return new Uint8Array(await subtle.decrypt({ name: 'AES-CTR', counter: ctrBlock(ctx.nonce, pos), length: 64 }, ctx.ck, data));\n    } catch (e) {\n      ctx.noSubtle = true;\n    }\n  }\n  const js = ctx.js || (ctx.js = new AES(ctx.aes));\n  const out = new Uint8Array(data.length);\n  const ks = new Uint8Array(16);\n  for (let off = 0; off < data.length; off += 16) {\n    ks.set(ctrBlock(ctx.nonce, pos + off));\n    js.encryptECB(ks);\n    const n = Math.min(16, data.length - off);\n    for (let i = 0; i < n; i++) out[off + i] = data[off + i] ^ ks[i];\n  }\n  return out;\n}\n\n/** Ask MEGA for a temporary download URL for a node inside a public folder. */\nasync function getDownloadUrl(api, folderId, handle, { signal } = {}) {\n  const r = await api.req({ a: 'g', g: 1, ssl: 2, n: handle }, { n: folderId, signal });\n  if (!r || typeof r.g !== 'string' || !/^https?:/.test(r.g)) {\n    if (r && typeof r.e === 'number' && r.e < 0) throw new MegaError(r.e);\n    throw new Error('MEGA did not return a download URL (possibly rate limited).');\n  }\n  return { url: r.g.replace(/^http:/, 'https:'), size: r.s };\n}\n\n// ---------------------------------------------------------------- file typing\nconst PHOTO_EXT = new Set(['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'webp', 'heic', 'heif', 'avif', 'bmp', 'tif', 'tiff', 'svg', 'dng', 'cr2', 'cr3', 'nef', 'arw', 'orf', 'rw2', 'raf']);\nconst VIDEO_EXT = new Set(['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', 'wmv', 'flv', '3gp', '3g2', 'mpg', 'mpeg', 'ts', 'mts', 'm2ts', 'ogv', 'vob', 'f4v']);\n\nfunction extOf(name) {\n  const i = name ? name.lastIndexOf('.') : -1;\n  return i > 0 ? name.slice(i + 1).toLowerCase() : '';\n}\n\n/** 'folder' | 'photo' | 'video' | 'other' */\nfunction kindOf(rec) {\n  if (rec.t === 1) return 'folder';\n  const e = extOf(rec.n);\n  if (PHOTO_EXT.has(e)) return 'photo';\n  if (VIDEO_EXT.has(e)) return 'video';\n  if (rec.d && rec.w) return 'video'; // media attrs with a picture size, unknown extension\n  return 'other';\n}\n\nfunction mimeOf(name) {\n  const e = extOf(name);\n  return ({\n    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', '3gp': 'video/3gpp', webm: 'video/webm', mkv: 'video/webm',\n    ogv: 'video/ogg', ts: 'video/mp2t', avi: 'video/x-msvideo',\n    jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg', png: 'image/png', gif: 'image/gif',\n    webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml',\n    tif: 'image/tiff', tiff: 'image/tiff',\n  })[e] || 'application/octet-stream';\n}\n\n// idb.js — tiny IndexedDB helper shared by page, worker and service worker.\n// Every call degrades to a no-op when IndexedDB is unavailable (private mode,\n// some file:// contexts), so the app keeps working, just without caching.\n//\n// Stores:\n//   listings  {id: cacheId, root, nodes, needsKey, at}  decrypted folder trees\n//   thumbs    {id: nodeHandle, b: ArrayBuffer | none: 1, at}  server thumbnails (type 0)\n//   streams   {id: nodeHandle, folder, key, size, name, mime}  what the SW needs to stream a file\n//   blocks    {id: handle:blockIndex, h, b: ArrayBuffer (ciphertext), n: bytes, at}  LRU playback cache\n//   meta      {id, ...}  small settings shared with the SW (e.g. 'blockCache': {enabled, max})\n\nconst IDB_NAME = 'mega-gallery';\nconst IDB_VERSION = 2;\nlet idbPromise = null;\n\nfunction idbOpen() {\n  if (idbPromise) return idbPromise;\n  idbPromise = new Promise((resolve) => {\n    let req;\n    try {\n      req = indexedDB.open(IDB_NAME, IDB_VERSION);\n    } catch {\n      return resolve(null);\n    }\n    req.onupgradeneeded = () => {\n      const db = req.result;\n      if (!db.objectStoreNames.contains('listings')) db.createObjectStore('listings', { keyPath: 'id' });\n      if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs', { keyPath: 'id' }).createIndex('at', 'at');\n      if (!db.objectStoreNames.contains('streams')) db.createObjectStore('streams', { keyPath: 'id' });\n      if (!db.objectStoreNames.contains('blocks')) {\n        const b = db.createObjectStore('blocks', { keyPath: 'id' });\n        b.createIndex('n', 'n');            // key cursor over sizes -> total bytes without loading values\n        b.createIndex('atn', ['at', 'n']);  // oldest-first eviction, again without loading values\n      }\n      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'id' });\n    };\n    req.onsuccess = () => {\n      const db = req.result;\n      db.onversionchange = () => db.close();\n      resolve(db);\n    };\n    req.onerror = () => resolve(null);\n    req.onblocked = () => resolve(null);\n  });\n  return idbPromise;\n}\n\nfunction idbRun(store, mode, fn) {\n  return idbOpen().then((db) => new Promise((resolve) => {\n    if (!db) return resolve(undefined);\n    let result;\n    try {\n      const tx = db.transaction(store, mode);\n      result = fn(tx.objectStore(store));\n      tx.oncomplete = () => resolve(typeof result === 'function' ? result() : result);\n      tx.onerror = tx.onabort = () => resolve(undefined);\n    } catch {\n      resolve(undefined);\n    }\n  }));\n}\n\nfunction idbGet(store, key) {\n  return idbRun(store, 'readonly', (s) => {\n    const r = s.get(key);\n    return () => r.result;\n  });\n}\n\nfunction idbGetMany(store, keys) {\n  return idbRun(store, 'readonly', (s) => {\n    const reqs = keys.map((k) => s.get(k));\n    return () => reqs.map((r) => r.result);\n  }).then((v) => v || keys.map(() => undefined));\n}\n\nfunction idbPut(store, value) {\n  return idbRun(store, 'readwrite', (s) => { s.put(value); });\n}\n\nfunction idbPutMany(store, values) {\n  return idbRun(store, 'readwrite', (s) => { for (const v of values) s.put(v); });\n}\n\nfunction idbDelete(store, key) {\n  return idbRun(store, 'readwrite', (s) => { s.delete(key); });\n}\n\nfunction idbClear(store) {\n  return idbRun(store, 'readwrite', (s) => { s.clear(); });\n}\n\nfunction idbCount(store) {\n  return idbRun(store, 'readonly', (s) => {\n    const r = s.count();\n    return () => r.result || 0;\n  }).then((v) => v || 0);\n}\n\n/** Keep the thumbnail cache bounded: drop the oldest entries beyond `max`. */\nasync function idbTrimThumbs(max) {\n  const n = await idbCount('thumbs');\n  if (n <= max) return 0;\n  let toDrop = n - Math.floor(max * 0.85);\n  const dropped = toDrop;\n  await idbRun('thumbs', 'readwrite', (s) => {\n    const cur = s.index('at').openKeyCursor();\n    cur.onsuccess = () => {\n      const c = cur.result;\n      if (!c || toDrop <= 0) return;\n      s.delete(c.primaryKey);\n      toDrop--;\n      c.continue();\n    };\n  });\n  return dropped;\n}\n\n/** Total bytes held by the encrypted block cache (sums the `n` index keys; no values are read). */\nfunction idbSumBlocks() {\n  return idbRun('blocks', 'readonly', (s) => {\n    let sum = 0;\n    const cur = s.index('n').openKeyCursor();\n    cur.onsuccess = () => { const c = cur.result; if (!c) return; sum += c.key || 0; c.continue(); };\n    return () => sum;\n  }).then((v) => v || 0);\n}\n\n/** Evict oldest blocks until the cache holds at most `maxBytes`. Returns the number dropped. */\nasync function idbTrimBlocks(maxBytes) {\n  let dropped = 0;\n  await idbRun('blocks', 'readwrite', (s) => {\n    let sum = 0;\n    const cur = s.index('atn').openKeyCursor(null, 'prev'); // newest first\n    cur.onsuccess = () => {\n      const c = cur.result;\n      if (!c) return;\n      sum += c.key[1] || 0;\n      if (sum > maxBytes) { s.delete(c.primaryKey); dropped++; }\n      c.continue();\n    };\n  });\n  return dropped;\n}\n\n// worker.js — Web Worker: folder walks, thumbnail fetch/decrypt/cache, previews,\n// and the no-service-worker fallback download. Keeps all crypto and JSON parsing\n// of large listings off the main thread. Uses symbols from core.js and idb.js.\n// Can also run in-page (same code, `self` shimmed) if a Worker can't be created.\n\nconst api = new MegaApi({ maxConcurrent: 3 });\nconst jobs = new Map(); // job -> AbortController\nconst post = (msg, transfer) => self.postMessage(msg, transfer || []);\n\nconst THUMB_CACHE_MAX = 30000; // ~300–400 MB worst case; oldest dropped first\nconst BATCH_MAX = 120;          // handles per POST (latency is flat in batch size)\nconst MAX_ACTIVE = 6;           // concurrent attribute POSTs (each to a different cluster)\nconst CLUSTER_URL_TTL = 15 * 60 * 1000;\n\nself.onmessage = (e) => {\n  const m = e.data;\n  handle(m).catch((err) => {\n    if (m.req) post({ type: 'res', req: m.req, error: String(err && err.message || err) });\n  });\n};\n\nasync function handle(m) {\n  switch (m.type) {\n    case 'ping': return post({ type: 'pong' });\n    case 'list': return doList(m);\n    case 'cancel': { const ac = jobs.get(m.job); if (ac) ac.abort(); return; }\n    case 'cached': return doCached(m);\n    case 'forget': await idbDelete('listings', m.cid); return;\n    case 'thumbs': return setWanted(m.want);\n    case 'preview': return doPreview(m);\n    case 'full': return doFull(m);\n    case 'cacheStats': return post({ type: 'res', req: m.req, thumbs: await idbCount('thumbs'), blocks: await idbSumBlocks() });\n    case 'clearThumbs': await idbClear('thumbs'); return post({ type: 'res', req: m.req, ok: true });\n    case 'clearBlocks': await idbClear('blocks'); return post({ type: 'res', req: m.req, ok: true });\n  }\n}\n\n// ------------------------------------------------------------ tree walk\nasync function doList(m) {\n  const ac = new AbortController();\n  jobs.set(m.job, ac);\n  try {\n    let last = 0;\n    const res = await listFolder(api, m.link, {\n      signal: ac.signal,\n      onProgress: (p) => {\n        const now = Date.now();\n        if (p.phase !== 'decrypt' || now - last > 120) { last = now; post({ type: 'progress', job: m.job, ...p }); }\n      },\n    });\n    const data = { id: m.cid, root: res.root, nodes: res.nodes, needsKey: res.needsKey, at: Date.now() };\n    post({ type: 'listed', job: m.job, cid: m.cid, data });\n    idbPut('listings', data);\n  } catch (err) {\n    post({ type: 'listError', job: m.job, cid: m.cid, error: String(err.message || err), code: err.code, aborted: err.name === 'AbortError' });\n  } finally {\n    jobs.delete(m.job);\n  }\n}\n\nasync function doCached(m) {\n  const rows = await idbGetMany('listings', m.cids);\n  post({ type: 'res', req: m.req, rows: rows.map((r) => r || null) });\n}\n\n// ------------------------------------------------------------ thumbnails\n// The page sends its full \"want list\" (visible tiles first, then prefetch) whenever\n// the viewport settles. We serve IndexedDB hits immediately, then fetch misses from\n// MEGA in per-cluster batches, highest-priority cluster first.\nconst T = {\n  wanted: new Map(),   // id -> item, in priority order\n  lookup: new Set(),   // ids with an IDB lookup in flight\n  pending: new Map(),  // id -> item waiting for network\n  inflight: new Set(),\n  busy: new Set(),     // cluster keys with a POST in flight\n  active: 0,\n  urls: new Map(),     // cluster key -> {servers, at}\n};\n\nasync function setWanted(list) {\n  T.wanted = new Map(list.map((it) => [it.id, it]));\n  const check = list.filter((it) => !T.lookup.has(it.id) && !T.pending.has(it.id) && !T.inflight.has(it.id));\n  if (check.length) {\n    for (const it of check) T.lookup.add(it.id);\n    const rows = await idbGetMany('thumbs', check.map((it) => it.id));\n    check.forEach((it, i) => {\n      T.lookup.delete(it.id);\n      const row = rows[i];\n      if (row && row.b) post({ type: 'thumb', id: it.id, buf: row.b, cached: true }, [row.b]);\n      else if (row && row.none) post({ type: 'thumb', id: it.id, none: true });\n      else T.pending.set(it.id, it);\n    });\n  }\n  pump();\n}\n\nfunction pump() {\n  while (T.active < MAX_ACTIVE) {\n    const groups = new Map();\n    let best = null;\n    for (const id of T.wanted.keys()) {\n      const it = T.pending.get(id);\n      if (!it) continue;\n      const ck = it.folder + ':' + it.c;\n      if (T.busy.has(ck)) continue;\n      let g = groups.get(ck);\n      if (!g) { groups.set(ck, (g = [])); if (!best) best = ck; }\n      if (g.length < BATCH_MAX) g.push(it);\n    }\n    if (!best) return;\n    const items = groups.get(best);\n    for (const it of items) { T.pending.delete(it.id); T.inflight.add(it.id); }\n    T.busy.add(best);\n    T.active++;\n    runBatch(best, items).finally(() => {\n      T.busy.delete(best);\n      T.active--;\n      pump();\n    });\n  }\n}\n\nasync function clusterServers(ck, folder, fah, fresh) {\n  const hit = T.urls.get(ck);\n  if (!fresh && hit && Date.now() - hit.at < CLUSTER_URL_TTL) return hit.servers;\n  const servers = await faServers(api, folder, fah);\n  T.urls.set(ck, { servers, at: Date.now() });\n  return servers;\n}\n\nasync function runBatch(ck, items) {\n  let got = null;\n  for (let attempt = 0; attempt < 2 && !got; attempt++) {\n    try {\n      const servers = await clusterServers(ck, items[0].folder, items[0].fah, attempt > 0);\n      got = await postFileAttributes(servers, 0, items.map((it) => ({ id: it.id, fah: it.fah, key: it.k })));\n    } catch (err) {\n      console.warn('[mega-gallery worker] thumbnail batch failed', ck, err);\n      T.urls.delete(ck);\n      if (attempt === 0) await sleep(700 + Math.random() * 600);\n    }\n  }\n  const now = Date.now();\n  const puts = [];\n  for (const it of items) {\n    T.inflight.delete(it.id);\n    if (!got) { post({ type: 'thumb', id: it.id, error: true }); continue; }\n    const data = got.get(it.id);\n    if (data && data.length) {\n      const buf = data.slice().buffer;\n      puts.push({ id: it.id, b: buf.slice(0), at: now });\n      post({ type: 'thumb', id: it.id, buf }, [buf]);\n    } else {\n      puts.push({ id: it.id, none: 1, at: now });\n      post({ type: 'thumb', id: it.id, none: true });\n    }\n  }\n  if (puts.length) {\n    await idbPutMany('thumbs', puts);\n    if (Math.random() < 0.05) idbTrimThumbs(THUMB_CACHE_MAX);\n  }\n}\n\n// ------------------------------------------------------------ previews (type 1, ~1000px) — transient, not cached\nasync function doPreview(m) {\n  const ck = m.folder + ':' + m.c;\n  let got = null, lastErr = null;\n  for (let attempt = 0; attempt < 2 && !got; attempt++) {\n    try {\n      const servers = await clusterServers(ck, m.folder, m.fah, attempt > 0);\n      got = await postFileAttributes(servers, 1, [{ id: m.id, fah: m.fah, key: m.k }]);\n    } catch (err) { lastErr = err; }\n  }\n  const data = got && got.get(m.id);\n  if (data && data.length) {\n    const buf = data.slice().buffer;\n    post({ type: 'res', req: m.req, buf }, [buf]);\n  } else {\n    post({ type: 'res', req: m.req, error: lastErr ? String(lastErr.message) : 'No preview' });\n  }\n}\n\n// ------------------------------------------------------------ fallback full download (no service worker)\n// Only used when streaming via the service worker isn't possible (file://, SW blocked).\n// Downloads in 4 MB ranges, decrypts with AES-CTR, returns one ArrayBuffer.\nasync function doFull(m) {\n  const ac = new AbortController();\n  jobs.set(m.req, ac);\n  try {\n    const { url } = await getDownloadUrl(api, m.folder, m.id, { signal: ac.signal });\n    const ctx = fileCtrParams(m.k);\n    const out = new Uint8Array(m.size);\n    const CH = 4 * 1024 * 1024;\n    for (let pos = 0; pos < m.size; pos += CH) {\n      const end = Math.min(m.size, pos + CH) - 1;\n      const r = await fetch(`${url}/${pos}-${end}`, { signal: ac.signal });\n      if (r.status === 509) throw new MegaError(-17, 'MEGA bandwidth limit reached');\n      if (!r.ok) throw new Error(`Download HTTP ${r.status}`);\n      const ct = new Uint8Array(await r.arrayBuffer());\n      out.set(await ctrDecrypt(ctx, pos, ct), pos);\n      post({ type: 'fullProgress', req: m.req, loaded: end + 1, total: m.size });\n    }\n    post({ type: 'res', req: m.req, buf: out.buffer }, [out.buffer]);\n  } finally {\n    jobs.delete(m.req);\n  }\n}\n";
 // app.js — page UI. Uses core.js + idb.js symbols (inlined by the build) and
 // WORKER_SRC (the worker bundle as a string, injected by the build).
 
@@ -1280,6 +1365,7 @@ const ICON = {
   next: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.6c.7 0 1.3.3 1.8.8L12.3 6H18.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>',
   play: '<svg viewBox="0 0 10 10" fill="currentColor"><path d="M1 0.5v9l8-4.5z"/></svg>',
+  feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 9v6l5-3z" fill="currentColor" stroke="none"/></svg>',
   home: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
 };
 
@@ -1336,7 +1422,21 @@ function toast(msg, ms = 4200) {
 }
 
 // ================================================================ constants & state
-const LS = { links: 'mg.links', view: 'mg.view', scroll: 'mg.scroll', folder: 'mg.folder' };
+const LS = { links: 'mg.links', view: 'mg.view', scroll: 'mg.scroll', folder: 'mg.folder', vcache: 'mg.vcache' };
+
+// ---- Feed mode tunables
+// Videos with a known duration join the feed when longer than FEED_MIN_SECONDS. Files MEGA
+// stored no duration for fall back to a size gate: tune MIN_FEED_VIDEO_BYTES up or down to
+// match how big a ~10 s clip is in your library (placeholder: 5 MB).
+const MIN_FEED_VIDEO_BYTES = 5 * 1024 * 1024;
+const FEED_MIN_SECONDS = 10;
+const FEED_MAX_CARDS = 400;                    // cards per visit (the shuffle picks them)
+const FEED_SKIP_EXT = new Set(['wmv', 'avi', 'mpg', 'mpeg']);
+const FEED_FIRST_CHUNK = 1024 * 1024;          // first upstream range for feed streams (SW hint)
+const FEED_BLOCK = 1024 * 1024;                // must match BLOCK in sw-main.js
+const FEED_TAIL_BYTES = 256 * 1024;            // moov-at-end MP4s: warm the tail too
+const FEED_MAX_PREFETCH = 3;                   // videos buffering at once (focused + queued)
+const VIDEO_CACHE_MAX_BYTES = 500 * 1024 * 1024; // persistent encrypted block cache cap
 const STALE_MS = 60 * 60 * 1000; // re-list a folder in the background when the cached copy is older
 const KIND = { folder: 0, photo: 1, video: 2, other: 3 };
 const TILE_TARGET = { s: 82, m: 118, l: 178 };
@@ -1356,6 +1456,7 @@ const S = {
   scrollMemo: lsGet(LS.scroll, {}),
   ready: false,
   swReady: false,
+  vcache: { enabled: true, max: VIDEO_CACHE_MAX_BYTES, ...lsGet(LS.vcache, {}) },
 };
 S.view.q = ''; // search is not restored across sessions (it surprises more than it helps)
 
@@ -1829,6 +1930,7 @@ function thumbEvict() {
   const keep = new Set();
   for (const t of G.live.values()) keep.add(t.h);
   if (LB.r) keep.add(LB.r.h);
+  if (OV.current === 'feed') for (const r of FEED.items) keep.add(r.h);
   for (const [h, u] of TH.map) {
     if (TH.map.size <= TH.MAX * 0.85) break;
     if (keep.has(h)) continue;
@@ -1847,6 +1949,10 @@ W.on('thumb', (m) => {
       if (t.h === m.id) { t.el.classList.remove('loaded'); t.img.src = u; }
     }
     if (LB.r && LB.r.h === m.id && !$('#lbImg').getAttribute('src')) setLbImage(u, true);
+    if (OV.current === 'feed') {
+      const j = FEED.items.findIndex((r) => r.h === m.id);
+      if (j >= 0) { const img = FEED.cards[j].querySelector('.feed-poster'); if (img && !img.getAttribute('src')) img.src = u; }
+    }
     thumbEvict();
     scheduleStatus();
   } else if (m.none) {
@@ -1859,7 +1965,7 @@ W.on('thumb', (m) => {
 function requestThumbs() {
   lastWant = performance.now();
   const n = S.items.length;
-  if (!n || OV.current === 'lb' || OV.current === 'player') return;
+  if (!n || OV.current === 'lb' || OV.current === 'player' || OV.current === 'feed') return;
   const y = window.scrollY - G.top;
   const vh = window.innerHeight;
   const v0 = Math.max(0, Math.floor(y / G.rowH) * G.cols);
@@ -2061,7 +2167,7 @@ function openOverlay(name) {
   document.documentElement.style.overflow = 'hidden';
   history.pushState({ f: S.view.folder, ov: name }, '', location.href);
 }
-function overlayId(name) { return { links: 'sheet', lb: 'lb', player: 'player', info: 'info' }[name]; }
+function overlayId(name) { return { links: 'sheet', lb: 'lb', player: 'player', info: 'info', feed: 'feed' }[name]; }
 function closeOverlay() {
   if (!OV.current) return;
   if (history.state && history.state.ov) history.back(); // popstate closes it
@@ -2075,6 +2181,7 @@ function closeOverlayNow() {
   document.documentElement.style.overflow = '';
   if (name === 'player') stopVideo();
   if (name === 'lb') closeLightbox();
+  if (name === 'feed') stopFeed();
   if (name === 'links') S.sheetOpen = false;
   requestThumbs();
 }
@@ -2094,7 +2201,9 @@ function openLinks() {
   openOverlay('links');
   S.sheetOpen = true;
   renderLinks();
-  W.call('cacheStats', {}).then((m) => { $('#cacheInfo').textContent = `${fmtNum(m.thumbs)} thumbnails cached in this browser.`; }).catch(() => {});
+  $('#vcacheOn').checked = S.vcache.enabled;
+  $('#vcacheMax').textContent = fmtBytes(S.vcache.max);
+  refreshCacheInfo();
   if (!S.links.length) setTimeout(() => $('#linkInput').focus(), 50);
 }
 
@@ -2188,8 +2297,31 @@ $('#linkInput').addEventListener('keydown', (e) => {
 $('#btnRefreshAll').onclick = () => refreshAll();
 $('#btnClearThumbs').onclick = async () => {
   await W.call('clearThumbs', {});
-  $('#cacheInfo').textContent = 'Thumbnail cache cleared.';
+  toast('Thumbnail cache cleared.', 2000);
+  refreshCacheInfo();
 };
+$('#btnClearVideo').onclick = async () => {
+  await W.call('clearBlocks', {});
+  try { navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'cacheClear' }); } catch { /* ignore */ }
+  toast('Video cache cleared.', 2000);
+  refreshCacheInfo();
+};
+$('#vcacheOn').onchange = (e) => {
+  S.vcache.enabled = e.target.checked;
+  lsSet(LS.vcache, S.vcache);
+  applyVideoCacheCfg();
+};
+function refreshCacheInfo() {
+  W.call('cacheStats', {}).then((m) => {
+    $('#cacheInfo').textContent = `${fmtNum(m.thumbs)} thumbnails cached · video cache ${fmtBytes(m.blocks || 0)} of ${fmtBytes(S.vcache.max)}${S.vcache.enabled ? '' : ' (off)'}.`;
+  }).catch(() => {});
+}
+/** Tell the service worker (and its IndexedDB copy) whether/how much to cache. */
+function applyVideoCacheCfg() {
+  const cfg = { id: 'blockCache', enabled: !!S.vcache.enabled, max: S.vcache.max };
+  idbPut('meta', cfg);
+  try { navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage({ type: 'cacheCfg', ...cfg }); } catch { /* ignore */ }
+}
 
 // ---------------------------------------------------------------- item activation
 sizer.addEventListener('click', (e) => {
@@ -2232,12 +2364,12 @@ function openInfo(r) {
 }
 
 // ---------------------------------------------------------------- streaming via the service worker
-function streamInfoOf(r) { return { id: r.h, folder: r.L.id, key: r.k, size: r.s, name: r.n, mime: mimeOf(r.n) }; }
+function streamInfoOf(r, firstChunk) { return { id: r.h, folder: r.L.id, key: r.k, size: r.s, name: r.n, mime: mimeOf(r.n), firstChunk: firstChunk || 0 }; }
 function streamUrl(r) { return `__mg/stream/${r.h}/${encodeURIComponent(r.n.replace(/[/\\?#]/g, '_'))}`; }
 function canStream() { return S.swReady && !!navigator.serviceWorker.controller; }
-function registerStream(r) {
-  const info = streamInfoOf(r);
-  try { navigator.serviceWorker.controller.postMessage({ type: 'stream', info }); } catch { /* idb copy suffices */ }
+function registerStream(r, { firstChunk = 0, warmUrl = false } = {}) {
+  const info = streamInfoOf(r, firstChunk);
+  try { navigator.serviceWorker.controller.postMessage({ type: warmUrl ? 'warmUrl' : 'stream', info }); } catch { /* idb copy suffices */ }
   return idbPut('streams', info);
 }
 
@@ -2260,6 +2392,7 @@ async function setupServiceWorker() {
     if (m.type !== 'stream-error') return;
     const msg = m.code === -17 ? `MEGA transfer quota reached${m.message.includes('resets') ? ' — ' + m.message.split('(').pop().replace(')', '') : ''}. Try again later.` : m.message;
     if (OV.current === 'player') setMsg('#plMsg', esc(msg));
+    else if (OV.current === 'feed') setMsg('#feedMsg', esc(msg));
     else if (OV.current === 'lb') setMsg('#lbMsg', esc(msg));
     else toast(msg);
   });
@@ -2485,6 +2618,289 @@ vid.addEventListener('error', () => {
 });
 $('#plMsg').addEventListener('click', (e) => { if (e.target.closest('[data-try]') && PL.r) startVideo(PL.r); });
 
+
+// ---------------------------------------------------------------- feed (vertical video feed)
+// Full-screen scroll-snap cards over the current view. Three <video> elements rotate across
+// the cards around the focused one; everything else is a lightweight placeholder with the
+// MEGA thumbnail as a blurred poster. Streams go through the service worker, whose block
+// cache makes revisits instant; queued cards get their head/tail blocks warmed via Range fetches.
+const FEED = {
+  seed: (Math.random() * 0x100000000) >>> 0, // per-session shuffle seed (memory only)
+  visits: 0,
+  items: [], cards: [], vids: [],
+  cur: -1, sound: false, unmuted: false,
+  prefetch: new Map(), // handle -> {ac, tail}
+  settleT: 0, scrubT: 0, scrollY: 0, scrubbing: false,
+  scroller: $('#feedScroll'),
+};
+
+function mulberry32(a) {
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Content gate: duration when MEGA stored one, otherwise the size fallback. */
+function feedEligible(r) {
+  if (r.K !== 2 || r.t || !r.k) return false;
+  if (FEED_SKIP_EXT.has(r.x) || !BROWSER_VIDEO.has(r.x)) return false;
+  if (r.d) return r.d > FEED_MIN_SECONDS;
+  return r.s >= MIN_FEED_VIDEO_BYTES;
+}
+
+function feedList() {
+  const out = S.items.filter(feedEligible);
+  const rnd = mulberry32((FEED.seed ^ Math.imul(FEED.visits, 0x9E3779B9)) >>> 0);
+  for (let i = out.length - 1; i > 0; i--) { // Fisher–Yates
+    const j = Math.floor(rnd() * (i + 1));
+    const t = out[i]; out[i] = out[j]; out[j] = t;
+  }
+  return out.slice(0, FEED_MAX_CARDS);
+}
+
+function makeFeedVideo() {
+  const v = document.createElement('video');
+  v.playsInline = true;
+  v.setAttribute('playsinline', '');
+  v.setAttribute('webkit-playsinline', '');
+  v.muted = true;
+  v.loop = true;
+  v.preload = 'metadata';
+  v.addEventListener('playing', () => { if (v.parentElement) v.parentElement.classList.add('playing'); });
+  v.addEventListener('timeupdate', () => { if (v === feedCurVid()) updateFeedBar(v); });
+  v.addEventListener('error', () => {
+    if (v !== feedCurVid() || !v.getAttribute('src')) return;
+    const code = v.error && v.error.code;
+    const r = FEED.items[FEED.cur];
+    if (code === 4 || code === 3) setMsg('#feedMsg', `This browser can't decode this video (${esc(r.x)} / codec). Swipe on.`);
+  });
+  return v;
+}
+
+function openFeed() {
+  if (!S.items.length) return;
+  if (!canStream()) { toast('The feed needs streaming, which only works when the page is served over https (not file://).'); return; }
+  FEED.visits++;
+  const items = feedList();
+  if (!items.length) { toast(`No feed-worthy videos in this view (longer than ${FEED_MIN_SECONDS} s).`); return; }
+  FEED.scrollY = window.scrollY;
+  saveScroll();
+  openOverlay('feed');
+  FEED.items = items;
+  FEED.cur = -1;
+  const sc = FEED.scroller;
+  sc.innerHTML = '';
+  FEED.cards = [];
+  const frag = document.createDocumentFragment();
+  items.forEach((r, i) => {
+    const c = make('div', 'feed-card');
+    c.dataset.i = i;
+    const img = make('img', 'feed-poster');
+    img.alt = '';
+    img.decoding = 'async';
+    img.draggable = false;
+    const th = thumbGet(r.h);
+    if (th) img.src = th;
+    c.appendChild(img);
+    c.appendChild(make('div', 'spinner'));
+    frag.appendChild(c);
+    FEED.cards.push(c);
+  });
+  sc.appendChild(frag);
+  sc.scrollTop = 0;
+  if (!FEED.vids.length) for (let k = 0; k < 3; k++) FEED.vids.push(makeFeedVideo());
+  $('#feedHint').hidden = FEED.unmuted;
+  $('#feedFill').style.width = '0';
+  setMsg('#feedMsg', '');
+  setFeedIndex(0, true); // inside the tap: iOS lets playback start
+  feedWantThumbs();
+}
+
+function feedCurVid() {
+  if (FEED.cur < 0) return null;
+  return FEED.vids[FEED.cur % 3];
+}
+
+function setFeedIndex(i, force) {
+  const n = FEED.items.length;
+  i = Math.max(0, Math.min(n - 1, i));
+  if (i === FEED.cur && !force) return;
+  const prev = FEED.cur;
+  FEED.cur = i;
+  const r = FEED.items[i];
+  $('#feedName').textContent = r.n;
+  $('#feedMeta').textContent = [r.d ? fmtDur(r.d) : '', fmtBytes(r.s), pathOf(r)].filter(Boolean).join(' · ');
+  $('#feedCount').textContent = `${i + 1} / ${n}`;
+  setMsg('#feedMsg', '');
+  if (prev >= 0 && FEED.cards[prev]) FEED.cards[prev].classList.remove('cur');
+  FEED.cards[i].classList.add('cur');
+  // Slots: the three consecutive cards i-1, i, i+1 map to distinct videos (j % 3).
+  for (let k = -1; k <= 1; k++) {
+    const j = i + k;
+    if (j < 0 || j >= n) continue;
+    const v = FEED.vids[j % 3];
+    const card = FEED.cards[j];
+    const rr = FEED.items[j];
+    if (v.dataset.h !== rr.h) {
+      v.pause();
+      if (v.parentElement) v.parentElement.classList.remove('playing');
+      registerStream(rr, { firstChunk: FEED_FIRST_CHUNK });
+      v.dataset.h = rr.h;
+      const poster = LB.previews.get(rr.h) || thumbGet(rr.h);
+      if (poster) v.poster = poster; else v.removeAttribute('poster');
+      v.src = streamUrl(rr);
+    }
+    if (v.parentElement !== card) {
+      if (v.parentElement) v.parentElement.classList.remove('playing');
+      card.insertBefore(v, card.firstChild);
+    }
+    if (k === 0) {
+      v.preload = 'auto';
+      v.muted = !FEED.sound;
+      v.play().catch(() => {});
+    } else {
+      v.preload = 'metadata';
+      v.muted = true;
+      if (!v.paused) v.pause();
+    }
+  }
+  // Warm the next two cards (head + tail blocks, download URL) and drop anything else.
+  feedPrefetchPlan([i + 1, i + 2].filter((j) => j < n).map((j) => FEED.items[j]), true);
+  updateFeedBar(feedCurVid());
+}
+
+// ---- prefetch via the service worker (fills its block cache; aborting cancels upstream)
+function feedPrefetch(r, wantTail) {
+  let e = FEED.prefetch.get(r.h);
+  if (e && (!wantTail || e.tail)) return;
+  if (!e) {
+    while (FEED.prefetch.size >= FEED_MAX_PREFETCH) { // oldest first
+      const [h, old] = FEED.prefetch.entries().next().value;
+      old.ac.abort();
+      FEED.prefetch.delete(h);
+    }
+    e = { ac: new AbortController(), tail: false, n: 0 };
+    FEED.prefetch.set(r.h, e);
+    registerStream(r, { firstChunk: FEED_FIRST_CHUNK, warmUrl: true });
+    feedFetchRange(r, e, `bytes=0-${Math.min(r.s, FEED_BLOCK) - 1}`);
+  }
+  if (wantTail && !e.tail) {
+    e.tail = true;
+    const tailStart = Math.floor(Math.max(0, r.s - FEED_TAIL_BYTES) / FEED_BLOCK) * FEED_BLOCK; // block-aligned so it caches
+    if (tailStart >= FEED_BLOCK) feedFetchRange(r, e, `bytes=${tailStart}-${r.s - 1}`);
+  }
+}
+function feedFetchRange(r, e, range) {
+  e.n++;
+  fetch(streamUrl(r), { headers: { Range: range }, signal: e.ac.signal, cache: 'no-store' })
+    .then((res) => res.arrayBuffer())
+    .catch(() => {})
+    .finally(() => { if (--e.n === 0 && FEED.prefetch.get(r.h) === e) FEED.prefetch.delete(r.h); });
+}
+function feedPrefetchPlan(list, withTail) {
+  const keep = new Set(list.map((r) => r.h));
+  for (const [h, e] of FEED.prefetch) if (!keep.has(h)) { e.ac.abort(); FEED.prefetch.delete(h); }
+  for (const r of list) feedPrefetch(r, withTail);
+}
+
+// ---- scrolling: cheap head warm while flinging, full assignment once settled
+FEED.scroller.addEventListener('scroll', () => {
+  if (OV.current !== 'feed') return;
+  const sc = FEED.scroller;
+  const idx = Math.round(sc.scrollTop / Math.max(1, sc.clientHeight));
+  const now = performance.now();
+  if (now - (FEED.lastWarm || 0) > 200 && idx !== FEED.cur) { // while browsing: ~1 MB head only
+    FEED.lastWarm = now;
+    const r = FEED.items[idx];
+    if (r) feedPrefetch(r, false);
+  }
+  clearTimeout(FEED.settleT);
+  FEED.settleT = setTimeout(() => {
+    const i = Math.round(sc.scrollTop / Math.max(1, sc.clientHeight));
+    setFeedIndex(i);
+    feedWantThumbs();
+  }, 120);
+}, { passive: true });
+
+function feedStep(dir) {
+  const sc = FEED.scroller;
+  const j = Math.max(0, Math.min(FEED.items.length - 1, FEED.cur + dir));
+  sc.scrollTo({ top: j * sc.clientHeight, behavior: 'smooth' });
+}
+
+/** Posters for cards around the focus (thumbnails come from IndexedDB or MEGA via the worker). */
+function feedWantThumbs() {
+  const want = [];
+  const now = Date.now();
+  for (let j = Math.max(0, FEED.cur - 2); j <= Math.min(FEED.items.length - 1, FEED.cur + 8); j++) {
+    const r = FEED.items[j];
+    if (!r.tf || TH.map.has(r.h) || TH.none.has(r.h)) continue;
+    const e = TH.err.get(r.h);
+    if (e && now - e < 60000) continue;
+    want.push({ id: r.h, folder: r.L.id, c: r.tc, fah: r.tf, k: r.k });
+  }
+  if (want.length) W.post({ type: 'thumbs', want });
+}
+
+// ---- sound / seek
+function feedToggleSound() {
+  FEED.sound = !FEED.sound;
+  const v = feedCurVid();
+  if (v) { v.muted = !FEED.sound; if (v.paused) v.play().catch(() => {}); }
+  if (FEED.sound) { FEED.unmuted = true; $('#feedHint').hidden = true; }
+}
+FEED.scroller.addEventListener('click', (e) => {
+  if (e.target.closest('#feedBar')) return;
+  feedToggleSound();
+});
+function updateFeedBar(v) {
+  if (FEED.scrubbing) return;
+  $('#feedFill').style.width = v && v.duration ? (100 * v.currentTime / v.duration).toFixed(2) + '%' : '0';
+}
+(() => {
+  const bar = $('#feedBar');
+  const seekTo = (e) => {
+    const v = feedCurVid();
+    if (!v || !v.duration) return;
+    const rect = bar.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - rect.left - 12) / Math.max(1, rect.width - 24)));
+    $('#feedFill').style.width = (100 * x).toFixed(2) + '%';
+    clearTimeout(FEED.scrubT);
+    FEED.scrubT = setTimeout(() => { v.currentTime = x * v.duration; }, 40); // coalesce scrubs: no stall storms
+  };
+  bar.addEventListener('pointerdown', (e) => { FEED.scrubbing = true; bar.setPointerCapture(e.pointerId); seekTo(e); });
+  bar.addEventListener('pointermove', (e) => { if (FEED.scrubbing) seekTo(e); });
+  const end = (e) => { if (!FEED.scrubbing) return; seekTo(e); FEED.scrubbing = false; };
+  bar.addEventListener('pointerup', end);
+  bar.addEventListener('pointercancel', () => { FEED.scrubbing = false; });
+})();
+
+/** Tear down on exit: no audio leakage, no stray fetches, grid scroll untouched. */
+function stopFeed() {
+  clearTimeout(FEED.settleT);
+  for (const v of FEED.vids) {
+    v.pause();
+    v.muted = true;
+    v.removeAttribute('src');
+    v.removeAttribute('poster');
+    delete v.dataset.h;
+    v.load(); // aborts the stream -> the SW cancels upstream
+    if (v.parentElement) v.parentElement.removeChild(v);
+  }
+  for (const [, e] of FEED.prefetch) e.ac.abort();
+  FEED.prefetch.clear();
+  FEED.scroller.innerHTML = '';
+  FEED.cards = [];
+  FEED.items = [];
+  FEED.cur = -1;
+  FEED.scrubbing = false;
+  window.scrollTo(0, FEED.scrollY);
+  lastY = window.scrollY;
+}
+
 // ================================================================ controls wiring
 $('#btnRefresh').innerHTML = ICON.refresh;
 $('#btnRefresh').onclick = () => {
@@ -2498,6 +2914,8 @@ $('#btnRefresh').onclick = () => {
   toast('Refreshing folder listings…', 2000);
 };
 $('.i-link').outerHTML = ICON.link;
+$('.i-feed').outerHTML = ICON.feed;
+$('#btnFeed').onclick = openFeed;
 $('.i-search').outerHTML = ICON.search;
 for (const b of document.querySelectorAll('[data-close]')) b.innerHTML = ICON.close;
 $('#btnLinks').onclick = openLinks;
@@ -2575,6 +2993,13 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowLeft') lbStep(-1);
     return;
   }
+  if (OV.current === 'feed') {
+    if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === 'j') { e.preventDefault(); feedStep(1); }
+    if (e.key === 'ArrowUp' || e.key === 'PageUp' || e.key === 'k') { e.preventDefault(); feedStep(-1); }
+    if (e.key === ' ') { e.preventDefault(); const v = feedCurVid(); if (v) (v.paused ? v.play().catch(() => {}) : v.pause()); }
+    if (e.key === 'm') feedToggleSound();
+    return;
+  }
   if (!OV.current && e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); }
 });
 
@@ -2586,7 +3011,7 @@ async function boot() {
   S.view.folder = hf || (location.hash ? null : lsGet(LS.folder, null));
   history.replaceState({ f: S.view.folder }, '', hashFor(S.view.folder));
   renderHeader();
-  setupServiceWorker();
+  setupServiceWorker().then(applyVideoCacheCfg);
   await W.start();
 
   if (!S.links.length) { S.ready = true; onViewChanged(); openLinks(); return; }

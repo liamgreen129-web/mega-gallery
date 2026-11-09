@@ -1,4 +1,4 @@
-// Mega Gallery service worker — build 202611091015
+// Mega Gallery service worker — build 202611091113
 (() => {
 'use strict';
 // core.js — shared MEGA client code.
@@ -655,9 +655,11 @@ function mimeOf(name) {
 //   listings  {id: cacheId, root, nodes, needsKey, at}  decrypted folder trees
 //   thumbs    {id: nodeHandle, b: ArrayBuffer | none: 1, at}  server thumbnails (type 0)
 //   streams   {id: nodeHandle, folder, key, size, name, mime}  what the SW needs to stream a file
+//   blocks    {id: handle:blockIndex, h, b: ArrayBuffer (ciphertext), n: bytes, at}  LRU playback cache
+//   meta      {id, ...}  small settings shared with the SW (e.g. 'blockCache': {enabled, max})
 
 const IDB_NAME = 'mega-gallery';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 let idbPromise = null;
 
 function idbOpen() {
@@ -674,6 +676,12 @@ function idbOpen() {
       if (!db.objectStoreNames.contains('listings')) db.createObjectStore('listings', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs', { keyPath: 'id' }).createIndex('at', 'at');
       if (!db.objectStoreNames.contains('streams')) db.createObjectStore('streams', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('blocks')) {
+        const b = db.createObjectStore('blocks', { keyPath: 'id' });
+        b.createIndex('n', 'n');            // key cursor over sizes -> total bytes without loading values
+        b.createIndex('atn', ['at', 'n']);  // oldest-first eviction, again without loading values
+      }
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'id' });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -757,11 +765,38 @@ async function idbTrimThumbs(max) {
   return dropped;
 }
 
+/** Total bytes held by the encrypted block cache (sums the `n` index keys; no values are read). */
+function idbSumBlocks() {
+  return idbRun('blocks', 'readonly', (s) => {
+    let sum = 0;
+    const cur = s.index('n').openKeyCursor();
+    cur.onsuccess = () => { const c = cur.result; if (!c) return; sum += c.key || 0; c.continue(); };
+    return () => sum;
+  }).then((v) => v || 0);
+}
+
+/** Evict oldest blocks until the cache holds at most `maxBytes`. Returns the number dropped. */
+async function idbTrimBlocks(maxBytes) {
+  let dropped = 0;
+  await idbRun('blocks', 'readwrite', (s) => {
+    let sum = 0;
+    const cur = s.index('atn').openKeyCursor(null, 'prev'); // newest first
+    cur.onsuccess = () => {
+      const c = cur.result;
+      if (!c) return;
+      sum += c.key[1] || 0;
+      if (sum > maxBytes) { s.delete(c.primaryKey); dropped++; }
+      c.continue();
+    };
+  });
+  return dropped;
+}
+
 // sw-main.js — service worker that turns encrypted MEGA files into ordinary,
 // seekable HTTP responses for <video>/<img>. It answers Range requests with
 // 206 Partial Content, fetching only the needed byte ranges from MEGA and
 // decrypting them (AES-CTR, random access) as they stream through.
-// Nothing is cached: responses are marked no-store and never put in CacheStorage.
+// Responses are no-store and never put in CacheStorage; only encrypted 1 MB blocks are cached (see below).
 //
 // URL handled:  ./__mg/stream/<nodeHandle>/<filename>
 // The page registers {folder, key, size, mime} for the handle in IndexedDB
@@ -769,11 +804,67 @@ async function idbTrimThumbs(max) {
 
 const api = new MegaApi({ maxConcurrent: 2 });
 const streamInfo = new Map(); // handle -> info
-const dlUrls = new Map();     // handle -> {url, at}
-const DL_URL_TTL = 20 * 60 * 1000;
+const dlUrls = new Map();     // handle -> {url, at}  (resolved once per file; 403/404 triggers a refresh)
+const DL_URL_TTL = 6 * 60 * 60 * 1000;
 const OPEN_RANGE_CAP = 24 * 1024 * 1024; // answer "bytes=N-" with at most 24 MB; the player asks again
-const FIRST_CHUNK = 256 * 1024;          // small first upstream range -> fast start
+const FIRST_CHUNK = 256 * 1024;          // small first upstream range -> fast start (feed cards pass a bigger hint)
 const MAX_CHUNK = 4 * 1024 * 1024;
+
+// ---------------------------------------------------------------- encrypted block cache
+// Ciphertext is cached in 1 MB file-aligned blocks: a small in-memory LRU (always on) plus a
+// persistent IndexedDB LRU (settings: 'meta'/'blockCache' {enabled, max}). Decrypted bytes
+// never persist; a cached block is decrypted again on every read.
+const BLOCK = 1024 * 1024;
+const MEM_CACHE_MAX = 32 * 1024 * 1024;
+const BLOCK_CACHE_DEFAULT_MAX = 500 * 1024 * 1024;
+const mem = new Map(); // blockId -> Uint8Array
+let memBytes = 0;
+let cacheCfg = null, cacheCfgAt = 0, writtenSinceTrim = 0;
+
+function memGet(id) {
+  const b = mem.get(id);
+  if (b) { mem.delete(id); mem.set(id, b); }
+  return b;
+}
+function memPut(id, b) {
+  if (mem.has(id)) return;
+  mem.set(id, b);
+  memBytes += b.length;
+  while (memBytes > MEM_CACHE_MAX && mem.size > 1) {
+    const [k, v] = mem.entries().next().value;
+    mem.delete(k);
+    memBytes -= v.length;
+  }
+}
+async function getCacheCfg() {
+  if (cacheCfg && Date.now() - cacheCfgAt < 30000) return cacheCfg;
+  const row = await idbGet('meta', 'blockCache');
+  cacheCfg = { enabled: row ? row.enabled !== false : true, max: (row && row.max) || BLOCK_CACHE_DEFAULT_MAX };
+  cacheCfgAt = Date.now();
+  return cacheCfg;
+}
+async function getBlock(info, bi) {
+  const id = info.id + ':' + bi;
+  const m = memGet(id);
+  if (m) return m;
+  const cfg = await getCacheCfg();
+  if (!cfg.enabled) return null;
+  const row = await idbGet('blocks', id);
+  if (!row || !row.b) return null;
+  const u = new Uint8Array(row.b);
+  memPut(id, u);
+  if (Date.now() - row.at > 10 * 60 * 1000) idbPut('blocks', { ...row, at: Date.now() }); // LRU touch, rate-limited
+  return u;
+}
+async function putBlock(info, bi, u8) {
+  const id = info.id + ':' + bi;
+  memPut(id, u8);
+  const cfg = await getCacheCfg();
+  if (!cfg.enabled) return;
+  await idbPut('blocks', { id, h: info.id, b: u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength), n: u8.byteLength, at: Date.now() });
+  writtenSinceTrim += u8.byteLength;
+  if (writtenSinceTrim > 16 * BLOCK) { writtenSinceTrim = 0; idbTrimBlocks(cfg.max).catch(() => {}); }
+}
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
@@ -782,6 +873,12 @@ self.addEventListener('message', (e) => {
   const m = e.data || {};
   if (m.type === 'stream' && m.info) streamInfo.set(m.info.id, m.info);
   if (m.type === 'ping' && e.source) e.source.postMessage({ type: 'sw-pong' });
+  if (m.type === 'cacheCfg') { cacheCfg = { enabled: !!m.enabled, max: m.max || BLOCK_CACHE_DEFAULT_MAX }; cacheCfgAt = Date.now(); }
+  if (m.type === 'cacheClear') { mem.clear(); memBytes = 0; }
+  if (m.type === 'warmUrl' && m.info) { // resolve the download URL ahead of playback
+    streamInfo.set(m.info.id, m.info);
+    downloadUrl(m.info, false).catch(() => {});
+  }
 });
 
 self.addEventListener('fetch', (e) => {
@@ -883,80 +980,112 @@ function decryptedStream(info, start, end, clientId) {
   });
 }
 
-// Yields decrypted bytes for [start, end] in order. Upstream requests grow from
-// 256 KB to 4 MB; each one is read progressively so bytes reach the player as
-// they arrive. A dropped connection resumes once from the last good offset.
+// Yields decrypted bytes for [start, end] in order. Works in 1 MB file-aligned blocks:
+// a block already in the cache is served with zero network; the rest is fetched from
+// MEGA in ranges growing from firstChunk (256 KB, or the registration's hint) to 4 MB,
+// read progressively so bytes reach the player as they arrive, and every block that
+// completes on the way is stored. A dropped connection resumes once from the last good offset.
 async function* produce(info, start, end, signal) {
   const ctx = fileCtrParams(info.key);
+  const size = info.size;
+  const EMPTY = new Uint8Array(0);
   let pos = start - (start % 16); // CTR needs block-aligned offsets
-  let skip = start - pos;
-  let chunk = FIRST_CHUNK;
-  let refreshed = false;
-  while (pos <= end) {
-    const to = Math.min(end, pos + chunk - 1);
-    let p = pos;
-    let resumed = false;
-    for (;;) {
-      let resp;
-      try {
-        const url = await downloadUrl(info, false);
-        resp = await fetch(`${url}/${p}-${to}`, { signal, cache: 'no-store' });
-      } catch (err) {
-        if (signal.aborted) throw err;
-        if (resumed) throw new Error('Network error while streaming from MEGA');
-        resumed = true;
-        await sleep(800, signal);
-        continue;
+  let chunk = Math.max(16 * 1024, info.firstChunk || FIRST_CHUNK);
+  let acc = null, accBi = -1; // ciphertext accumulator for the block being filled
+
+  const clip = (p, plain) => {
+    const s = Math.max(0, start - p), e = Math.min(plain.length, end + 1 - p);
+    return e <= s ? EMPTY : (s === 0 && e === plain.length ? plain : plain.subarray(s, e));
+  };
+  // Feed ciphertext at absolute offset p into the per-block accumulator; store completed blocks.
+  const absorb = (p, bytes) => {
+    let o = 0;
+    while (o < bytes.length) {
+      const at = p + o;
+      const bi = Math.floor(at / BLOCK);
+      const bStart = bi * BLOCK, bLen = Math.min(BLOCK, size - bStart);
+      if (bi !== accBi) {
+        if (at === bStart) { accBi = bi; acc = new Uint8Array(bLen); } else { accBi = -1; acc = null; }
       }
-      if (resp.status === 509) {
-        const left = Number(resp.headers.get('X-MEGA-Time-Left')) || 0;
-        throw new MegaError(-17, left ? `resets in ~${Math.ceil(left / 60)} min` : 'bandwidth limit');
-      }
-      if (resp.status === 403 || resp.status === 404 || resp.status === 410) {
-        if (refreshed) throw new Error(`MEGA refused the download (HTTP ${resp.status})`);
-        refreshed = true;
-        dlUrls.delete(info.id);
-        continue; // temp URL expired — get a new one
-      }
-      if (!resp.ok || !resp.body) throw new Error(`MEGA download HTTP ${resp.status}`);
-      const reader = resp.body.getReader();
-      let carry = null;
-      try {
-        for (;;) {
-          const { value, done } = await reader.read();
-          let buf = value ? (carry ? concat(carry, value) : value) : carry;
-          carry = null;
-          if (done) {
-            if (buf && buf.length) { yield trim(await ctrDecrypt(ctx, p, buf)); p += buf.length; }
-            break;
-          }
-          const n = buf.length - (buf.length % 16);
-          if (n) { yield trim(await ctrDecrypt(ctx, p, buf.subarray(0, n))); p += n; }
-          if (n < buf.length) carry = buf.slice(n);
-        }
-      } catch (err) {
-        if (signal.aborted) throw err;
-        if (resumed) throw err;
-        resumed = true; // resume this range from the last decrypted block
-        continue;
-      }
-      if (p <= to) {
-        if (resumed) throw new Error('MEGA ended the stream early');
-        resumed = true;
-        continue;
-      }
-      break;
+      const take = Math.min(bytes.length - o, bStart + bLen - at);
+      if (acc) acc.set(bytes.subarray(o, o + take), at - bStart);
+      o += take;
+      if (acc && at + take === bStart + bLen) { putBlock(info, bi, acc).catch(() => {}); acc = null; accBi = -1; }
     }
+  };
+
+  while (pos <= end) {
+    const bi = Math.floor(pos / BLOCK);
+    if (pos === bi * BLOCK) {
+      const cached = await getBlock(info, bi);
+      if (cached) {
+        yield clip(pos, await ctrDecrypt(ctx, pos, cached));
+        pos += cached.length;
+        acc = null; accBi = -1;
+        continue;
+      }
+    }
+    let to = Math.min(end, pos + chunk - 1);
+    for (let b = bi + 1; b * BLOCK <= to; b++) if (mem.has(info.id + ':' + b)) { to = b * BLOCK - 1; break; }
+    yield* fetchRange(info, ctx, pos, to, signal, clip, absorb);
     pos = to + 1;
     chunk = Math.min(MAX_CHUNK, chunk * 2);
   }
+}
 
-  function trim(out) {
-    if (!skip) return out;
-    if (out.length <= skip) { skip -= out.length; return new Uint8Array(0); }
-    const r = out.subarray(skip);
-    skip = 0;
-    return r;
+async function* fetchRange(info, ctx, from, to, signal, clip, absorb) {
+  let p = from;
+  let resumed = false, refreshed = false;
+  for (;;) {
+    let resp;
+    try {
+      const url = await downloadUrl(info, false);
+      resp = await fetch(`${url}/${p}-${to}`, { signal, cache: 'no-store' });
+    } catch (err) {
+      if (signal.aborted) throw err;
+      if (resumed) throw new Error('Network error while streaming from MEGA');
+      resumed = true;
+      await sleep(800, signal);
+      continue;
+    }
+    if (resp.status === 509) {
+      const left = Number(resp.headers.get('X-MEGA-Time-Left')) || 0;
+      throw new MegaError(-17, left ? `resets in ~${Math.ceil(left / 60)} min` : 'bandwidth limit');
+    }
+    if (resp.status === 403 || resp.status === 404 || resp.status === 410) {
+      if (refreshed) throw new Error(`MEGA refused the download (HTTP ${resp.status})`);
+      refreshed = true;
+      dlUrls.delete(info.id);
+      continue; // temp URL expired — get a new one
+    }
+    if (!resp.ok || !resp.body) throw new Error(`MEGA download HTTP ${resp.status}`);
+    const reader = resp.body.getReader();
+    let carry = null;
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        let buf = value ? (carry ? concat(carry, value) : value) : carry;
+        carry = null;
+        if (done) {
+          if (buf && buf.length) { absorb(p, buf); yield clip(p, await ctrDecrypt(ctx, p, buf)); p += buf.length; }
+          break;
+        }
+        const n = buf.length - (buf.length % 16);
+        if (n) { const ct = buf.subarray(0, n); absorb(p, ct); yield clip(p, await ctrDecrypt(ctx, p, ct)); p += n; }
+        if (n < buf.length) carry = buf.slice(n);
+      }
+    } catch (err) {
+      if (signal.aborted) throw err;
+      if (resumed) throw err;
+      resumed = true; // resume this range from the last decrypted block
+      continue;
+    }
+    if (p <= to) {
+      if (resumed) throw new Error('MEGA ended the stream early');
+      resumed = true;
+      continue;
+    }
+    return;
   }
 }
 
