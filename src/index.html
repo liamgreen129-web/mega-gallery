@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f11" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gallery">
+<meta name="referrer" content="no-referrer">
+<meta name="format-detection" content="telephone=no">
+<title>Mega Gallery</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2317191c'/%3E%3Crect x='12' y='12' width='18' height='18' rx='3' fill='%237aa2ff'/%3E%3Crect x='34' y='12' width='18' height='18' rx='3' fill='%23eceef1'/%3E%3Crect x='12' y='34' width='18' height='18' rx='3' fill='%23eceef1'/%3E%3Crect x='34' y='34' width='18' height='18' rx='3' fill='%237aa2ff'/%3E%3C/svg%3E">
+<style>/*__CSS__*/</style>
+</head>
+<body>
+<header id="top">
+  <div class="bar bar1">
+    <nav id="crumbs" aria-label="Folder path"></nav>
+    <button id="btnRefresh" class="icon-btn" title="Refresh all folder listings" aria-label="Refresh"></button>
+    <button id="btnLinks" class="pill-btn" title="Manage folder links"><span class="i-link"></span><span id="linkCount">Links</span></button>
+  </div>
+  <div class="bar bar2">
+    <label class="search"><span class="i-search" aria-hidden="true"></span><input id="q" type="search" placeholder="Search names" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></label>
+    <select id="sort" aria-label="Sort">
+      <option value="size-desc">Largest first</option>
+      <option value="size-asc">Smallest first</option>
+      <option value="date-desc">Newest first</option>
+      <option value="date-asc">Oldest first</option>
+      <option value="name-asc">Name A–Z</option>
+      <option value="name-desc">Name Z–A</option>
+      <option value="type">Type</option>
+    </select>
+    <select id="mode" aria-label="View">
+      <option value="s">Small tiles</option>
+      <option value="m">Tiles</option>
+      <option value="l">Large tiles</option>
+      <option value="list">List</option>
+    </select>
+  </div>
+  <div class="bar bar3">
+    <div class="seg" id="flat" role="group" aria-label="Subfolders">
+      <button data-flat="0">Folders</button><button data-flat="1">All files</button>
+    </div>
+    <div id="chips" role="group" aria-label="Filter by type">
+      <button data-kind="all">All</button><button data-kind="media">Media</button><button data-kind="photo">Photos</button><button data-kind="video">Videos</button><button data-kind="folder">Folders</button><button data-kind="other">Other</button>
+    </div>
+  </div>
+  <div class="bar bar4"><div id="stats" aria-live="polite"></div><div id="status"></div></div>
+  <div id="progress" hidden><div></div></div>
+</header>
+
+<main id="main">
+  <div id="listHead" hidden>
+    <button data-col="name">Name</button><button data-col="date">Modified</button><button data-col="size">Size</button>
+  </div>
+  <div id="sizer"></div>
+  <div id="empty" hidden></div>
+</main>
+
+<div id="sheet" class="ov-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-card">
+    <div class="sheet-head"><h2 id="sheetTitle">Folder links</h2><button class="icon-btn" data-close aria-label="Close"></button></div>
+    <form id="addForm">
+      <textarea id="linkInput" rows="2" placeholder="Paste one or more public folder links&#10;mega.nz/folder/…#key  or  mega.nz/#F!…!key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      <button type="submit" class="primary">Add</button>
+    </form>
+    <div id="addMsg" class="form-msg" role="status"></div>
+    <ul id="linkList"></ul>
+    <div class="sheet-foot">
+      <div id="cacheInfo"></div>
+      <div class="foot-btns"><button id="btnClearThumbs">Clear thumbnail cache</button><button id="btnRefreshAll" class="primary">Refresh all</button></div>
+      <p class="fine">Everything runs in this page. Listings and thumbnails are cached in this browser only. Videos and full-size photos stream through the page and are never saved to disk.</p>
+    </div>
+  </div>
+</div>
+
+<div id="lb" class="ov" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
+  <div class="lb-stage"><img id="lbImg" alt=""><div class="spinner" id="lbSpin" hidden></div></div>
+  <div class="ov-top">
+    <button class="icon-btn" data-close aria-label="Close"></button>
+    <div class="ov-title"><div class="t-name" id="lbName"></div><div class="t-meta" id="lbMeta"></div></div>
+    <button id="lbOrig" class="pill-btn">Original</button>
+  </div>
+  <button class="nav prev" id="lbPrev" aria-label="Previous photo"></button>
+  <button class="nav next" id="lbNext" aria-label="Next photo"></button>
+  <div class="ov-msg" id="lbMsg"></div>
+</div>
+
+<div id="player" class="ov" hidden role="dialog" aria-modal="true" aria-label="Video player">
+  <div class="pl-stage"><video id="vid" controls playsinline preload="metadata"></video></div>
+  <div class="ov-top">
+    <button class="icon-btn" data-close aria-label="Close"></button>
+    <div class="ov-title"><div class="t-name" id="plName"></div><div class="t-meta" id="plMeta"></div></div>
+    <a id="plMega" class="pill-btn" target="_blank" rel="noopener noreferrer">Open in MEGA</a>
+  </div>
+  <div class="ov-msg" id="plMsg"></div>
+</div>
+
+<div id="info" class="ov-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="infoName">
+  <div class="sheet-card small">
+    <div class="sheet-head"><h2 id="infoName"></h2><button class="icon-btn" data-close aria-label="Close"></button></div>
+    <dl id="infoBody"></dl>
+    <div class="foot-btns"><a id="infoMega" class="pill-btn primary" target="_blank" rel="noopener noreferrer">Open in MEGA</a></div>
+  </div>
+</div>
+
+<div id="toast" role="status" hidden></div>
+<script>/*__JS__*/</script>
+</body>
+</html>

@@ -1,0 +1,2622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0f11" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gallery">
+<meta name="referrer" content="no-referrer">
+<meta name="format-detection" content="telephone=no">
+<title>Mega Gallery</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2317191c'/%3E%3Crect x='12' y='12' width='18' height='18' rx='3' fill='%237aa2ff'/%3E%3Crect x='34' y='12' width='18' height='18' rx='3' fill='%23eceef1'/%3E%3Crect x='12' y='34' width='18' height='18' rx='3' fill='%23eceef1'/%3E%3Crect x='34' y='34' width='18' height='18' rx='3' fill='%237aa2ff'/%3E%3C/svg%3E">
+<style>:root {
+  --bg: #0e0f11;
+  --bg-head: rgba(14, 15, 17, 0.86);
+  --card: #17191c;
+  --fg: #eceef1;
+  --muted: #9aa1ab;
+  --line: rgba(255, 255, 255, 0.08);
+  --chip: #1f2226;
+  --chip-on-bg: #eceef1;
+  --chip-on-fg: #0e0f11;
+  --accent: #7aa2ff;
+  --tile: #1a1c20;
+  --danger: #ff7a7a;
+  --ok: #5fd38d;
+  --radius: 10px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f6f7f9;
+    --bg-head: rgba(246, 247, 249, 0.88);
+    --card: #ffffff;
+    --fg: #14161a;
+    --muted: #5f6672;
+    --line: rgba(0, 0, 0, 0.09);
+    --chip: #e8eaee;
+    --chip-on-bg: #14161a;
+    --chip-on-fg: #ffffff;
+    --accent: #3358e0;
+    --tile: #e4e6ea;
+    --danger: #d23a3a;
+    --ok: #1f9d55;
+    color-scheme: light;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+
+/* ---------------------------------------------------------------- header */
+#top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-head);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  backdrop-filter: saturate(160%) blur(18px);
+  border-bottom: 1px solid var(--line);
+  padding: calc(var(--safe-t) + 6px) calc(var(--safe-r) + 12px) 6px calc(var(--safe-l) + 12px);
+}
+.bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bar + .bar { margin-top: 7px; }
+.bar1 { min-height: 34px; }
+#crumbs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 17px;
+}
+#crumbs::-webkit-scrollbar { display: none; }
+#crumbs button {
+  background: none;
+  border: 0;
+  padding: 4px 4px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-weight: 600;
+  max-width: 46vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+#crumbs button:last-child { color: var(--fg); }
+#crumbs .sep { color: var(--muted); opacity: 0.6; flex-shrink: 0; }
+#crumbs .home { display: inline-flex; align-items: center; gap: 6px; }
+
+.icon-btn {
+  width: 36px; height: 36px;
+  flex-shrink: 0;
+  display: inline-grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: var(--chip);
+}
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn.spin svg { animation: spin 0.9s linear infinite; }
+.pill-btn {
+  height: 34px;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 12px;
+  border: 0; border-radius: 17px;
+  background: var(--chip);
+  font-size: 14px; font-weight: 500;
+  text-decoration: none; color: inherit;
+  white-space: nowrap;
+}
+.pill-btn svg { width: 16px; height: 16px; }
+.primary { background: var(--accent) !important; color: #fff !important; border: 0; }
+
+.search {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 10px;
+  background: var(--chip); border-radius: 10px;
+}
+.search svg { width: 16px; height: 16px; color: var(--muted); flex-shrink: 0; }
+.search input {
+  flex: 1; min-width: 0;
+  border: 0; outline: 0; background: none;
+  font-size: 16px; /* >=16px stops iOS zooming on focus */
+}
+.search input::-webkit-search-decoration { -webkit-appearance: none; }
+select {
+  height: 36px; max-width: 34vw;
+  padding: 0 26px 0 10px;
+  border: 0; border-radius: 10px;
+  background: var(--chip) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%239aa1ab' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;
+  -webkit-appearance: none; appearance: none;
+  font-size: 14px;
+}
+
+.bar3 { overflow: hidden; }
+.seg { display: inline-flex; flex-shrink: 0; background: var(--chip); border-radius: 9px; padding: 2px; }
+.seg button { border: 0; background: none; padding: 5px 10px; border-radius: 7px; font-size: 13px; font-weight: 500; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--fg); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+#chips {
+  flex: 1; min-width: 0;
+  display: flex; gap: 6px;
+  overflow-x: auto; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+  padding-right: 20px;
+}
+#chips::-webkit-scrollbar { display: none; }
+#chips button {
+  flex-shrink: 0;
+  border: 0; border-radius: 15px;
+  padding: 5px 12px;
+  background: var(--chip);
+  font-size: 13px; font-weight: 500;
+}
+#chips button[aria-pressed="true"] { background: var(--chip-on-bg); color: var(--chip-on-fg); }
+.bar4 { justify-content: space-between; font-size: 12.5px; color: var(--muted); min-height: 16px; margin-top: 6px !important; }
+#stats { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#stats b { color: var(--fg); font-weight: 600; }
+#status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+
+#progress { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; overflow: hidden; }
+#progress div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+#progress.indet div { width: 30%; animation: indet 1.1s ease-in-out infinite; }
+@keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------------------------------------------------------------- grid */
+#main { padding: 2px calc(var(--safe-r) + 2px) calc(var(--safe-b) + 40px) calc(var(--safe-l) + 2px); }
+#sizer { position: relative; width: 100%; }
+.tile {
+  position: absolute; top: 0; left: 0;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--tile);
+  contain: strict;
+  cursor: pointer;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+.tile .ph {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+  color: rgba(255,255,255,.85);
+}
+.tile .ph svg { width: 38%; height: 38%; max-width: 64px; max-height: 64px; color: var(--accent); }
+.tile img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.18s ease-out;
+}
+.tile.loaded img { opacity: 1; }
+.tile .badge, .tile .size {
+  position: absolute; bottom: 4px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.58);
+  color: #fff;
+  font-size: 11px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  pointer-events: none;
+}
+.tile .badge { left: 4px; display: none; }
+.tile .badge svg { width: 8px; height: 8px; margin-right: 3px; vertical-align: 0; }
+.tile.k2 .badge { display: block; }
+.tile .size { right: 4px; display: none; }
+#sizer.show-size .tile:not(.k0) .size { display: block; }
+.tile .cap { display: none; }
+.tile.k0 .cap {
+  display: block;
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 18px 7px 6px;
+  background: linear-gradient(transparent, rgba(0,0,0,.55));
+  color: #fff;
+}
+.tile.k0 .ph { align-items: start; padding-top: 18%; }
+.cap .nm { font-size: 12.5px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.cap .mt { font-size: 11px; opacity: 0.8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (hover: hover) {
+  .tile:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+}
+
+/* list mode */
+#listHead {
+  display: grid; grid-template-columns: 1fr 110px 92px;
+  gap: 8px;
+  padding: 6px 10px 6px 66px;
+  font-size: 12px; color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+#listHead button { border: 0; background: none; padding: 2px 0; text-align: left; color: inherit; font-weight: 600; }
+#listHead button:last-child { text-align: right; }
+#listHead button.on { color: var(--fg); }
+#sizer.list .tile {
+  border-radius: 0;
+  background: none;
+  border-bottom: 1px solid var(--line);
+  display: block;
+}
+#sizer.list .tile .ph, #sizer.list .tile img {
+  inset: auto; top: 6px; left: 10px; width: 46px; height: 46px; border-radius: 5px;
+}
+#sizer.list .tile .ph { font-size: 9px; padding: 0 !important; align-items: center !important; }
+#sizer.list .tile .ph svg { width: 26px; height: 26px; }
+#sizer.list .tile .badge { left: 12px; bottom: 8px; font-size: 9px; padding: 0 4px; line-height: 13px; }
+#sizer.list .tile .cap {
+  display: grid !important; grid-template-columns: 1fr 110px 92px; gap: 8px; align-items: center;
+  position: absolute; left: 66px; right: 10px; top: 0; bottom: 0;
+  padding: 0; background: none; color: var(--fg);
+}
+#sizer.list .cap .nm { -webkit-line-clamp: 1; font-weight: 500; font-size: 14px; }
+#sizer.list .cap .sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sizer.list .cap .dt { font-size: 12.5px; color: var(--muted); }
+#sizer.list .cap .sz { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+#sizer.list .tile .size { display: none !important; }
+.cap .sub, .cap .dt, .cap .sz { display: none; }
+#sizer.list .cap .sub, #sizer.list .cap .dt, #sizer.list .cap .sz { display: block; }
+#sizer.list .cap .mt { display: none; }
+@media (max-width: 520px) {
+  #listHead, #sizer.list .tile .cap { grid-template-columns: 1fr 76px; }
+  #listHead [data-col="date"], #sizer.list .cap .dt { display: none !important; }
+}
+
+#empty { padding: 60px 24px; text-align: center; color: var(--muted); }
+#empty h3 { color: var(--fg); margin: 0 0 6px; font-size: 18px; }
+#empty .primary { margin-top: 16px; height: 40px; padding: 0 18px; border-radius: 20px; font-weight: 600; }
+
+/* ---------------------------------------------------------------- sheets */
+.ov-sheet {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sheet-card {
+  width: 100%; max-width: 620px;
+  max-height: calc(100dvh - var(--safe-t) - 24px);
+  overflow-y: auto; overscroll-behavior: contain;
+  background: var(--card);
+  border-radius: 16px 16px 0 0;
+  padding: 14px calc(var(--safe-r) + 16px) calc(var(--safe-b) + 16px) calc(var(--safe-l) + 16px);
+  box-shadow: 0 -10px 40px rgba(0,0,0,.35);
+}
+@media (min-width: 700px) {
+  .ov-sheet { align-items: center; }
+  .sheet-card { border-radius: 16px; max-height: 86vh; }
+}
+.sheet-card.small { max-width: 460px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.sheet-head h2 { margin: 0; font-size: 18px; word-break: break-word; }
+#addForm { display: flex; gap: 8px; align-items: stretch; }
+#addForm textarea {
+  flex: 1; min-width: 0; resize: vertical; min-height: 44px;
+  padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--bg);
+  font-size: 16px; line-height: 1.3;
+}
+#addForm button { padding: 0 18px; border-radius: 10px; font-weight: 600; }
+.form-msg { min-height: 18px; margin: 6px 2px 4px; font-size: 13px; }
+.form-msg.err { color: var(--danger); }
+.form-msg.ok { color: var(--ok); }
+#linkList { list-style: none; margin: 6px 0 0; padding: 0; }
+#linkList li { padding: 12px 0; border-top: 1px solid var(--line); }
+.lk-row { display: flex; align-items: flex-start; gap: 10px; }
+.lk-main { flex: 1; min-width: 0; }
+.lk-name { font-weight: 600; word-break: break-word; }
+.lk-url { font-size: 12px; color: var(--muted); word-break: break-all; margin-top: 2px; }
+.lk-stat { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.lk-stat.err { color: var(--danger); }
+.lk-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.lk-btns button { height: 30px; padding: 0 10px; border-radius: 15px; border: 0; background: var(--chip); font-size: 13px; }
+.lk-key { display: flex; gap: 6px; margin-top: 8px; }
+.lk-key input { flex: 1; min-width: 0; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-size: 16px; }
+.lk-key button { padding: 0 12px; border-radius: 8px; border: 0; }
+.lk-bar { height: 3px; background: var(--chip); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.lk-bar div { height: 100%; background: var(--accent); width: 0; transition: width .2s; }
+.sheet-foot { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.foot-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
+.foot-btns button { height: 34px; padding: 0 14px; border-radius: 17px; border: 0; background: var(--chip); font-size: 14px; }
+.fine { font-size: 12px; line-height: 1.45; margin: 12px 0 0; }
+#infoBody { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 8px; font-size: 14px; }
+#infoBody dt { color: var(--muted); }
+#infoBody dd { margin: 0; word-break: break-word; font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- overlays (lightbox / player) */
+.ov {
+  position: fixed; inset: 0; z-index: 50;
+  background: #000; color: #fff;
+  height: 100dvh;
+}
+.ov-top {
+  position: absolute; left: 0; right: 0; top: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(var(--safe-t) + 8px) calc(var(--safe-r) + 12px) 22px calc(var(--safe-l) + 12px);
+  background: linear-gradient(rgba(0,0,0,.72), rgba(0,0,0,0));
+  transition: opacity .2s;
+  z-index: 2;
+}
+.ov .icon-btn, .ov .pill-btn { background: rgba(255,255,255,.14); color: #fff; }
+.ov-title { flex: 1; min-width: 0; }
+.t-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-meta { font-size: 12px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.ov.chrome-off .ov-top, .ov.chrome-off .nav { opacity: 0; pointer-events: none; }
+.ov-msg {
+  position: absolute; left: 50%; bottom: calc(var(--safe-b) + 28px);
+  transform: translateX(-50%);
+  max-width: min(92vw, 520px);
+  padding: 8px 14px; border-radius: 12px;
+  background: rgba(30,30,30,.86);
+  font-size: 13.5px; text-align: center; line-height: 1.4;
+  z-index: 3;
+}
+.ov-msg:empty { display: none; }
+.ov-msg button, .ov-msg a { margin: 8px 4px 2px; height: 30px; padding: 0 12px; border-radius: 15px; border: 0; background: rgba(255,255,255,.18); color: #fff; font-size: 13px; display: inline-flex; align-items: center; text-decoration: none; }
+.lb-stage { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; touch-action: pan-x pan-y pinch-zoom; }
+#lbImg { max-width: 100%; max-height: 100%; object-fit: contain; transition: filter .25s; -webkit-user-select: none; user-select: none; -webkit-touch-callout: default; }
+#lbImg.blur { filter: blur(6px); width: 100%; height: 100%; }
+.nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 46px; height: 64px; border: 0; border-radius: 10px;
+  background: rgba(255,255,255,.1); color: #fff;
+  display: grid; place-items: center; z-index: 2;
+  transition: opacity .2s;
+}
+.nav svg { width: 22px; height: 22px; }
+.nav.prev { left: calc(var(--safe-l) + 10px); }
+.nav.next { right: calc(var(--safe-r) + 10px); }
+.nav:disabled { opacity: 0 !important; pointer-events: none; }
+@media (hover: none) { .nav { display: none; } }
+.spinner {
+  position: absolute; width: 34px; height: 34px;
+  border: 3px solid rgba(255,255,255,.25); border-top-color: #fff;
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+.pl-stage { position: absolute; inset: 0; display: grid; place-items: center; padding-top: calc(var(--safe-t) + 56px); padding-bottom: var(--safe-b); }
+#vid { width: 100%; height: 100%; max-height: 100%; background: #000; }
+
+#toast {
+  position: fixed; left: 50%; bottom: calc(var(--safe-b) + 18px); transform: translateX(-50%);
+  z-index: 60;
+  max-width: min(92vw, 520px);
+  padding: 10px 16px; border-radius: 12px;
+  background: var(--chip-on-bg); color: var(--chip-on-fg);
+  font-size: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.3);
+}
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="bar bar1">
+    <nav id="crumbs" aria-label="Folder path"></nav>
+    <button id="btnRefresh" class="icon-btn" title="Refresh all folder listings" aria-label="Refresh"></button>
+    <button id="btnLinks" class="pill-btn" title="Manage folder links"><span class="i-link"></span><span id="linkCount">Links</span></button>
+  </div>
+  <div class="bar bar2">
+    <label class="search"><span class="i-search" aria-hidden="true"></span><input id="q" type="search" placeholder="Search names" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></label>
+    <select id="sort" aria-label="Sort">
+      <option value="size-desc">Largest first</option>
+      <option value="size-asc">Smallest first</option>
+      <option value="date-desc">Newest first</option>
+      <option value="date-asc">Oldest first</option>
+      <option value="name-asc">Name A–Z</option>
+      <option value="name-desc">Name Z–A</option>
+      <option value="type">Type</option>
+    </select>
+    <select id="mode" aria-label="View">
+      <option value="s">Small tiles</option>
+      <option value="m">Tiles</option>
+      <option value="l">Large tiles</option>
+      <option value="list">List</option>
+    </select>
+  </div>
+  <div class="bar bar3">
+    <div class="seg" id="flat" role="group" aria-label="Subfolders">
+      <button data-flat="0">Folders</button><button data-flat="1">All files</button>
+    </div>
+    <div id="chips" role="group" aria-label="Filter by type">
+      <button data-kind="all">All</button><button data-kind="media">Media</button><button data-kind="photo">Photos</button><button data-kind="video">Videos</button><button data-kind="folder">Folders</button><button data-kind="other">Other</button>
+    </div>
+  </div>
+  <div class="bar bar4"><div id="stats" aria-live="polite"></div><div id="status"></div></div>
+  <div id="progress" hidden><div></div></div>
+</header>
+
+<main id="main">
+  <div id="listHead" hidden>
+    <button data-col="name">Name</button><button data-col="date">Modified</button><button data-col="size">Size</button>
+  </div>
+  <div id="sizer"></div>
+  <div id="empty" hidden></div>
+</main>
+
+<div id="sheet" class="ov-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-card">
+    <div class="sheet-head"><h2 id="sheetTitle">Folder links</h2><button class="icon-btn" data-close aria-label="Close"></button></div>
+    <form id="addForm">
+      <textarea id="linkInput" rows="2" placeholder="Paste one or more public folder links&#10;mega.nz/folder/…#key  or  mega.nz/#F!…!key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+      <button type="submit" class="primary">Add</button>
+    </form>
+    <div id="addMsg" class="form-msg" role="status"></div>
+    <ul id="linkList"></ul>
+    <div class="sheet-foot">
+      <div id="cacheInfo"></div>
+      <div class="foot-btns"><button id="btnClearThumbs">Clear thumbnail cache</button><button id="btnRefreshAll" class="primary">Refresh all</button></div>
+      <p class="fine">Everything runs in this page. Listings and thumbnails are cached in this browser only. Videos and full-size photos stream through the page and are never saved to disk.</p>
+    </div>
+  </div>
+</div>
+
+<div id="lb" class="ov" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
+  <div class="lb-stage"><img id="lbImg" alt=""><div class="spinner" id="lbSpin" hidden></div></div>
+  <div class="ov-top">
+    <button class="icon-btn" data-close aria-label="Close"></button>
+    <div class="ov-title"><div class="t-name" id="lbName"></div><div class="t-meta" id="lbMeta"></div></div>
+    <button id="lbOrig" class="pill-btn">Original</button>
+  </div>
+  <button class="nav prev" id="lbPrev" aria-label="Previous photo"></button>
+  <button class="nav next" id="lbNext" aria-label="Next photo"></button>
+  <div class="ov-msg" id="lbMsg"></div>
+</div>
+
+<div id="player" class="ov" hidden role="dialog" aria-modal="true" aria-label="Video player">
+  <div class="pl-stage"><video id="vid" controls playsinline preload="metadata"></video></div>
+  <div class="ov-top">
+    <button class="icon-btn" data-close aria-label="Close"></button>
+    <div class="ov-title"><div class="t-name" id="plName"></div><div class="t-meta" id="plMeta"></div></div>
+    <a id="plMega" class="pill-btn" target="_blank" rel="noopener noreferrer">Open in MEGA</a>
+  </div>
+  <div class="ov-msg" id="plMsg"></div>
+</div>
+
+<div id="info" class="ov-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="infoName">
+  <div class="sheet-card small">
+    <div class="sheet-head"><h2 id="infoName"></h2><button class="icon-btn" data-close aria-label="Close"></button></div>
+    <dl id="infoBody"></dl>
+    <div class="foot-btns"><a id="infoMega" class="pill-btn primary" target="_blank" rel="noopener noreferrer">Open in MEGA</a></div>
+  </div>
+</div>
+
+<div id="toast" role="status" hidden></div>
+<script>(() => {
+'use strict';
+const BUILD = "202611091015";
+// core.js — shared MEGA client code.
+// Runs unchanged in: the page, the walker/thumbnail Web Worker, the streaming
+// Service Worker, and Node (for tests). The build strips `export` and inlines it.
+//
+// Logic follows megajs v1.3 (API request + hashcash, key/attribute handling) and
+// MEGA's own webclient (file-attribute/thumbnail protocol, media attributes).
+
+// ---------------------------------------------------------------- base64url
+const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const B64_LUT = new Int16Array(128).fill(-1);
+for (let i = 0; i < 64; i++) B64_LUT[B64_CHARS.charCodeAt(i)] = i;
+B64_LUT[43] = 62; // '+'
+B64_LUT[47] = 63; // '/'
+
+function b64dec(s) {
+  const out = new Uint8Array(((s.length * 3) >> 2) + 3);
+  let n = 0, buf = 0, bits = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    const v = c < 128 ? B64_LUT[c] : -1;
+    if (v < 0) continue;
+    buf = ((buf << 6) | v) & 0xffffff;
+    bits += 6;
+    if (bits >= 8) { bits -= 8; out[n++] = (buf >> bits) & 255; }
+  }
+  return out.slice(0, n);
+}
+
+function b64enc(u8) {
+  const C = B64_CHARS;
+  let s = '', i = 0;
+  for (; i + 2 < u8.length; i += 3) {
+    const v = (u8[i] << 16) | (u8[i + 1] << 8) | u8[i + 2];
+    s += C[(v >> 18) & 63] + C[(v >> 12) & 63] + C[(v >> 6) & 63] + C[v & 63];
+  }
+  if (u8.length - i === 1) {
+    const v = u8[i] << 16;
+    s += C[(v >> 18) & 63] + C[(v >> 12) & 63];
+  } else if (u8.length - i === 2) {
+    const v = (u8[i] << 16) | (u8[i + 1] << 8);
+    s += C[(v >> 18) & 63] + C[(v >> 12) & 63] + C[(v >> 6) & 63];
+  }
+  return s;
+}
+
+const UTF8 = new TextDecoder();
+
+// ---------------------------------------------------------------- AES-128 (pure JS)
+// Table-based AES after SJCL. Synchronous and allocation-free per block, which
+// beats WebCrypto for the thousands of tiny ECB/CBC operations a folder needs.
+const AES_T = (() => {
+  const enc = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint8Array(256)];
+  const dec = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint8Array(256)];
+  const sbox = enc[4], sboxInv = dec[4];
+  const d = new Uint8Array(256), th = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) th[(d[i] = (i << 1) ^ ((i >> 7) * 283)) ^ i] = i;
+  let x, xInv, x2, x4, x8, s, tEnc, tDec;
+  for (x = xInv = 0; !sbox[x]; x ^= x2 || 1, xInv = th[xInv] || 1) {
+    s = xInv ^ (xInv << 1) ^ (xInv << 2) ^ (xInv << 3) ^ (xInv << 4);
+    s = (s >> 8) ^ (s & 255) ^ 99;
+    sbox[x] = s;
+    sboxInv[s] = x;
+    x8 = d[(x4 = d[(x2 = d[x])])];
+    tDec = (x8 * 0x1010101) ^ (x4 * 0x10001) ^ (x2 * 0x101) ^ (x * 0x1010100);
+    tEnc = (d[s] * 0x101) ^ (s * 0x1010100);
+    for (let i = 0; i < 4; i++) {
+      enc[i][x] = tEnc = (tEnc << 24) ^ (tEnc >>> 8);
+      dec[i][s] = tDec = (tDec << 24) ^ (tDec >>> 8);
+    }
+  }
+  return [enc, dec];
+})();
+
+class AES {
+  constructor(key) {
+    if (!key || key.length !== 16) throw new Error('AES key must be 16 bytes');
+    const sbox = AES_T[0][4], decT = AES_T[1];
+    const ek = new Int32Array(44), dk = new Int32Array(44);
+    for (let i = 0; i < 4; i++) ek[i] = (key[4 * i] << 24) | (key[4 * i + 1] << 16) | (key[4 * i + 2] << 8) | key[4 * i + 3];
+    let i, j, tmp, rcon = 1;
+    for (i = 4; i < 44; i++) {
+      tmp = ek[i - 1];
+      if (i % 4 === 0) {
+        tmp = (sbox[tmp >>> 24] << 24) ^ (sbox[(tmp >> 16) & 255] << 16) ^ (sbox[(tmp >> 8) & 255] << 8) ^ sbox[tmp & 255];
+        tmp = (tmp << 8) ^ (tmp >>> 24) ^ (rcon << 24);
+        rcon = (rcon << 1) ^ ((rcon >> 7) * 283);
+      }
+      ek[i] = ek[i - 4] ^ tmp;
+    }
+    for (j = 0; i; j++, i--) {
+      tmp = ek[j & 3 ? i : i - 4];
+      dk[j] = i <= 4 || j < 4 ? tmp
+        : decT[0][sbox[tmp >>> 24]] ^ decT[1][sbox[(tmp >> 16) & 255]] ^ decT[2][sbox[(tmp >> 8) & 255]] ^ decT[3][sbox[tmp & 255]];
+    }
+    this.k = [ek, dk];
+    this.w = new Int32Array(4);
+    this.o = new Int32Array(4);
+  }
+
+  _crypt(dir) {
+    const inp = this.w, out = this.o, key = this.k[dir], T = AES_T[dir];
+    const t0 = T[0], t1 = T[1], t2 = T[2], t3 = T[3], sbox = T[4];
+    let a = inp[0] ^ key[0], b = inp[dir ? 3 : 1] ^ key[1], c = inp[2] ^ key[2], d = inp[dir ? 1 : 3] ^ key[3];
+    let a2, b2, c2, k = 4;
+    for (let r = 0; r < 9; r++) {
+      a2 = t0[a >>> 24] ^ t1[(b >> 16) & 255] ^ t2[(c >> 8) & 255] ^ t3[d & 255] ^ key[k];
+      b2 = t0[b >>> 24] ^ t1[(c >> 16) & 255] ^ t2[(d >> 8) & 255] ^ t3[a & 255] ^ key[k + 1];
+      c2 = t0[c >>> 24] ^ t1[(d >> 16) & 255] ^ t2[(a >> 8) & 255] ^ t3[b & 255] ^ key[k + 2];
+      d = t0[d >>> 24] ^ t1[(a >> 16) & 255] ^ t2[(b >> 8) & 255] ^ t3[c & 255] ^ key[k + 3];
+      k += 4; a = a2; b = b2; c = c2;
+    }
+    for (let r = 0; r < 4; r++) {
+      out[dir ? 3 & -r : r] = (sbox[a >>> 24] << 24) ^ (sbox[(b >> 16) & 255] << 16) ^ (sbox[(c >> 8) & 255] << 8) ^ sbox[d & 255] ^ key[k++];
+      a2 = a; a = b; b = c; c = d; d = a2;
+    }
+  }
+
+  _load(u8, off) {
+    const w = this.w;
+    for (let i = 0; i < 4; i++, off += 4) w[i] = (u8[off] << 24) | (u8[off + 1] << 16) | (u8[off + 2] << 8) | u8[off + 3];
+  }
+
+  _store(u8, off) {
+    const o = this.o;
+    for (let i = 0; i < 4; i++, off += 4) {
+      const v = o[i];
+      u8[off] = v >>> 24; u8[off + 1] = (v >> 16) & 255; u8[off + 2] = (v >> 8) & 255; u8[off + 3] = v & 255;
+    }
+  }
+
+  /** In-place ECB decrypt (MEGA uses this to unwrap node keys). */
+  decryptECB(u8) {
+    for (let off = 0; off + 16 <= u8.length; off += 16) { this._load(u8, off); this._crypt(1); this._store(u8, off); }
+    return u8;
+  }
+
+  encryptECB(u8) {
+    for (let off = 0; off + 16 <= u8.length; off += 16) { this._load(u8, off); this._crypt(0); this._store(u8, off); }
+    return u8;
+  }
+
+  /** In-place CBC decrypt, zero IV, no padding (node attributes and thumbnails). */
+  decryptCBC(u8) {
+    let p0 = 0, p1 = 0, p2 = 0, p3 = 0;
+    const w = this.w, o = this.o;
+    for (let off = 0; off + 16 <= u8.length; off += 16) {
+      this._load(u8, off);
+      const c0 = w[0], c1 = w[1], c2 = w[2], c3 = w[3];
+      this._crypt(1);
+      o[0] ^= p0; o[1] ^= p1; o[2] ^= p2; o[3] ^= p3;
+      this._store(u8, off);
+      p0 = c0; p1 = c1; p2 = c2; p3 = c3;
+    }
+    return u8;
+  }
+}
+
+// ---------------------------------------------------------------- keys & attributes
+/** 32-byte file key -> 16-byte AES key (k[0..15] XOR k[16..31]); folder keys pass through. */
+function nodeAesKey(k) {
+  if (k.length !== 32) return k;
+  const out = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) out[i] = k[i] ^ k[i + 16];
+  return out;
+}
+
+/** Decrypt a node's `a` attribute blob. Returns {n, c, ...} or null when the key is wrong. */
+function decryptAttrs(aB64, key16) {
+  if (!aB64) return null;
+  const buf = b64dec(aB64);
+  if (!buf.length || buf.length % 16) return null;
+  new AES(key16).decryptCBC(buf);
+  let end = buf.length;
+  while (end > 0 && buf[end - 1] === 0) end--;
+  // 'MEGA{"'
+  if (buf[0] !== 77 || buf[1] !== 69 || buf[2] !== 71 || buf[3] !== 65 || buf[4] !== 123 || buf[5] !== 34) return null;
+  const json = UTF8.decode(buf.subarray(4, end));
+  try {
+    return JSON.parse(json);
+  } catch {
+    const m = json.match(/"n"\s*:\s*"((?:\\"|[^"])*)"/);
+    return m ? { n: m[1] } : { n: 'MALFORMED_ATTRIBUTES' };
+  }
+}
+
+/** Original file mtime (unix seconds) encoded in the fingerprint attribute `c`. */
+function fingerprintMtime(c) {
+  if (typeof c !== 'string' || c.length < 24) return 0;
+  const b = b64dec(c);
+  if (b.length < 18) return 0;
+  const len = b[16];
+  if (!len || len > 8 || b.length < 17 + len) return 0;
+  let t = 0;
+  for (let i = len - 1; i >= 0; i--) t = t * 256 + b[17 + i];
+  // Reject nonsense (before 1980 or more than a year in the future).
+  return t > 315532800 && t < Date.now() / 1000 + 31536000 ? t : 0;
+}
+
+/** Parse a node's `fa` string ("924:0*AbCd…/924:1*EfGh…/…:8*…"). */
+function parseFa(fa) {
+  const r = {};
+  if (!fa) return r;
+  const re = /(\d+):(\d+)\*([\w-]+)/g;
+  let m;
+  while ((m = re.exec(fa))) {
+    const type = +m[2];
+    if (type === 0) r.thumb = { c: m[1], h: m[3] };
+    else if (type === 1) r.preview = { c: m[1], h: m[3] };
+  }
+  return r;
+}
+
+// XXTEA (media attributes, type 8/9 inside `fa`) — ported from MEGA webclient nodedec.js
+function xxteaDecrypt(v, k) {
+  const DELTA = 0x9e3779b9;
+  const int32 = (i) => i & 0xffffffff;
+  const mx = (sum, y, z, p, e) => (((z >>> 5) ^ (y << 2)) + ((y >>> 3) ^ (z << 4))) ^ ((sum ^ y) + (k[(p & 3) ^ e] ^ z));
+  const n = v.length - 1;
+  let y = v[0], z, sum, e, p;
+  const q = Math.floor(6 + 52 / v.length);
+  for (sum = int32(q * DELTA); sum !== 0; sum = int32(sum - DELTA)) {
+    e = (sum >>> 2) & 3;
+    for (p = n; p > 0; --p) {
+      z = v[p - 1];
+      y = v[p] = int32(v[p] - mx(sum, y, z, p, e));
+    }
+    z = v[n];
+    y = v[0] = int32(v[0] - mx(sum, y, z, 0, e));
+  }
+  return v;
+}
+
+/** Decode width/height/fps/duration from the inline `:8*` media attribute. Zero network. */
+function decodeMediaAttrs(fa, key32) {
+  if (!fa || !key32 || key32.length !== 32) return null;
+  const pos = fa.indexOf(':8*');
+  if (pos < 0) return null;
+  const raw = b64dec(fa.substr(pos + 3, 11));
+  if (raw.length < 8) return null;
+  const v = new Uint32Array(2);
+  v[0] = raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24);
+  v[1] = raw[4] | (raw[5] << 8) | (raw[6] << 16) | (raw[7] << 24);
+  const k = new Uint32Array(4);
+  for (let i = 0; i < 4; i++) {
+    const o = 16 + i * 4;
+    k[i] = (key32[o] << 24) | (key32[o + 1] << 16) | (key32[o + 2] << 8) | key32[o + 3];
+  }
+  xxteaDecrypt(v, k);
+  const b = new Uint8Array(8);
+  for (let i = 0; i < 2; i++) {
+    b[i * 4] = v[i] & 255; b[i * 4 + 1] = (v[i] >>> 8) & 255; b[i * 4 + 2] = (v[i] >>> 16) & 255; b[i * 4 + 3] = v[i] >>> 24;
+  }
+  let width = (b[0] >> 1) + ((b[1] & 127) << 7);
+  if (b[0] & 1) width = (width << 3) + 16384;
+  let height = b[2] + ((b[3] & 63) << 8);
+  if (b[1] & 128) height = (height << 3) + 16384;
+  let fps = (b[3] >> 7) + ((b[4] & 63) << 1);
+  if (b[3] & 64) fps = (fps << 3) + 128;
+  let playtime = (b[4] >> 7) + (b[5] << 1) + (b[6] << 9);
+  if (b[4] & 64) playtime = playtime * 60 + 131100;
+  return { width, height, fps, playtime };
+}
+
+// ---------------------------------------------------------------- links
+class LinkError extends Error {}
+
+/**
+ * Normalise a pasted MEGA folder link. Accepts:
+ *   https://mega.nz/folder/ID#KEY            (+ /folder/SUB or /file/FILE suffix)
+ *   https://mega.nz/#F!ID!KEY                (+ !SUB)
+ *   mega.co.nz / www. variants, missing scheme, surrounding text/quotes/<>,
+ *   links with no key (key can be supplied later).
+ */
+function parseMegaLink(input) {
+  let s = String(input || '').trim();
+  if (!s) throw new LinkError('Paste a MEGA folder link.');
+  // Pull the first mega URL out of surrounding text.
+  const m = s.match(/(?:https?:\/\/)?(?:www\.)?mega(?:\.co)?\.nz\/[^\s"'<>]+/i) || s.match(/#?F![\w-]+(?:![\w-]*)*/);
+  if (m) s = m[0];
+  s = s.replace(/\s+/g, '').replace(/[)\].,;]+$/, '');
+  try { s = decodeURIComponent(s); } catch { /* keep as-is */ }
+
+  let id, key = null, sub = null;
+  let mm;
+  if ((mm = s.match(/\/(file|folder|embed)\/([\w-]+)(?:#([\w-]*))?(.*)$/i))) {
+    if (mm[1].toLowerCase() !== 'folder') throw new LinkError('That is a single-file link. Paste a folder link (mega.nz/folder/…).');
+    id = mm[2];
+    key = mm[3] || null;
+    const rest = mm[4] || '';
+    const subm = rest.match(/\/folder\/([\w-]+)/i);
+    if (subm) sub = subm[1];
+  } else if ((mm = s.match(/#?(F?)!([\w-]+)(?:!([\w-]*))?(?:!([\w-]+))?/))) {
+    if (!mm[1]) throw new LinkError('That is a single-file link. Paste a folder link (#F!…).');
+    id = mm[2];
+    key = mm[3] || null;
+    sub = mm[4] || null;
+  } else {
+    throw new LinkError('Not a MEGA folder link. Expected mega.nz/folder/ID#KEY or mega.nz/#F!ID!KEY.');
+  }
+  if (!/^[\w-]{8}$/.test(id)) throw new LinkError(`Folder ID "${id}" should be 8 characters.`);
+  if (key !== null && !/^[\w-]{22}$/.test(key)) throw new LinkError(`Decryption key should be 22 characters (got ${key.length}).`);
+  if (sub !== null && !/^[\w-]{8}$/.test(sub)) sub = null;
+  return { id, key, sub, url: canonicalLink(id, key, sub) };
+}
+
+function canonicalLink(id, key, sub) {
+  return `https://mega.nz/folder/${id}${key ? '#' + key : ''}${sub ? '/folder/' + sub : ''}`;
+}
+
+// ---------------------------------------------------------------- API
+const API_ERRORS = {
+  '-1': 'MEGA internal error', '-2': 'Invalid request', '-3': 'MEGA is busy, try again',
+  '-4': 'Rate limited by MEGA, slow down', '-6': 'Too many requests', '-8': 'Link expired',
+  '-9': 'Not found: the folder was deleted or the link is wrong', '-11': 'Access denied',
+  '-14': 'Wrong decryption key', '-15': 'Session expired', '-16': 'This link was taken down or blocked',
+  '-17': 'Transfer quota exceeded', '-18': 'Temporarily unavailable', '-19': 'Too many connections',
+};
+
+class MegaError extends Error {
+  constructor(code, extra) {
+    super((API_ERRORS[code] || `MEGA error ${code}`) + (extra ? ` (${extra})` : ''));
+    this.code = code;
+  }
+}
+
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+    const t = setTimeout(resolve, ms);
+    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+  });
+}
+
+// Port of megajs generateHashcashToken (MEGA's anti-abuse proof-of-work).
+async function solveHashcash(challenge) {
+  const [versionStr, easinessStr, , tokenStr] = challenge.split(':');
+  if (Number(versionStr) !== 1) throw new Error('Unsupported MEGA hashcash challenge');
+  const easiness = Number(easinessStr);
+  const base = ((easiness & 63) << 1) + 1;
+  const shifts = (easiness >> 6) * 7 + 3;
+  const threshold = base << shifts;
+  const token = b64dec(tokenStr);
+  const buffer = new Uint8Array(4 + 262144 * 48);
+  for (let i = 0; i < 262144; i++) buffer.set(token, 4 + i * 48);
+  for (;;) {
+    const view = new DataView(await crypto.subtle.digest('SHA-256', buffer));
+    if (view.getUint32(0) <= threshold) return `1:${tokenStr}:${b64enc(buffer.slice(0, 4))}`;
+    let j = 0;
+    for (;;) { buffer[j]++; if (buffer[j++]) break; }
+  }
+}
+
+/** Minimal MEGA API client: request sequencing, polite concurrency, EAGAIN backoff, hashcash. */
+class MegaApi {
+  constructor(opts = {}) {
+    this.gateway = opts.gateway || 'https://g.api.mega.co.nz/';
+    this.seq = Math.floor(Math.random() * 1e9);
+    this.max = opts.maxConcurrent || 3;
+    this.active = 0;
+    this.waiters = [];
+  }
+
+  async req(payload, opts = {}) {
+    if (this.active >= this.max) await new Promise((r) => this.waiters.push(r));
+    this.active++;
+    try { return await this._req(payload, opts); } finally {
+      this.active--;
+      const next = this.waiters.shift();
+      if (next) next();
+    }
+  }
+
+  async _req(payload, { n, signal } = {}) {
+    let hashcash = null, busy = 0, netRetry = false, hcTries = 0;
+    for (;;) {
+      const qs = `id=${++this.seq}${n ? '&n=' + encodeURIComponent(n) : ''}`;
+      const headers = { 'Content-Type': 'application/json' };
+      if (hashcash) headers['X-Hashcash'] = hashcash;
+      let res;
+      try {
+        res = await fetch(`${this.gateway}cs?${qs}`, { method: 'POST', headers, body: JSON.stringify([payload]), signal });
+      } catch (e) {
+        if (e.name === 'AbortError' || (signal && signal.aborted)) throw e;
+        if (netRetry) throw new Error(`Network error talking to MEGA (${e.message})`);
+        netRetry = true; // retry-once for plain network failures
+        await sleep(1200, signal);
+        continue;
+      }
+      const challenge = res.headers.get('X-Hashcash');
+      if (challenge && hcTries++ < 3) { hashcash = await solveHashcash(challenge); continue; }
+      if (res.status >= 500 || res.status === 429) {
+        if (busy++ < 4) { await sleep(600 * 2 ** busy + Math.random() * 400, signal); continue; }
+        throw new Error(`MEGA API unavailable (HTTP ${res.status})`);
+      }
+      if (!res.ok) throw new Error(`MEGA API HTTP ${res.status}`);
+      const json = await res.json();
+      const r = Array.isArray(json) ? json[0] : json;
+      if (typeof r === 'number' && r < 0) {
+        if ((r === -3 || r === -4 || r === -6) && busy++ < 5) { await sleep(500 * 2 ** busy + Math.random() * 500, signal); continue; }
+        throw new MegaError(r);
+      }
+      return r;
+    }
+  }
+}
+
+// ---------------------------------------------------------------- folder listing
+/**
+ * One `f` call with r:1 returns the whole tree under a public folder link.
+ * Decrypts keys/attributes in slices, yielding between slices.
+ * Returns compact records: {h,p,t,s,ts,mt,n,k,fa,d,w,hh}
+ */
+async function listFolder(api, link, { signal, onProgress } = {}) {
+  onProgress && onProgress({ phase: 'fetch' });
+  const resp = await api.req({ a: 'f', c: 1, ca: 1, r: 1 }, { n: link.id, signal });
+  const f = (resp && resp.f) || [];
+  if (!f.length) throw new MegaError(-9);
+  return decryptListing(f, link, { signal, onProgress });
+}
+
+async function decryptListing(f, link, { signal, onProgress } = {}) {
+  const shareAes = link.key ? new AES(b64dec(link.key)) : null;
+  const root = f.find((n) => typeof n.k === 'string' && n.k.split('/').some((p) => p.split(':')[0] === n.h)) || f.find((n) => n.t === 1) || f[0];
+  const out = [];
+  let badKey = 0, okKey = 0;
+  const SLICE = 1500;
+  for (let i = 0; i < f.length; i++) {
+    const n = f[i];
+    const rec = { h: n.h, p: n.h === root.h ? '' : n.p, t: n.t === 1 ? 1 : 0, s: n.s || 0, ts: n.ts || 0, mt: n.ts || 0, n: null };
+    if (shareAes && typeof n.k === 'string') {
+      const parts = n.k.split('/');
+      // Prefer the entry keyed by the share root.
+      parts.sort((a, b) => (b.startsWith(root.h + ':') ? 1 : 0) - (a.startsWith(root.h + ':') ? 1 : 0));
+      for (const part of parts) {
+        const kb = part.slice(part.indexOf(':') + 1);
+        if (!kb || kb.length >= 44) continue; // RSA-wrapped keys are for logged-in owners only
+        const k = b64dec(kb);
+        if (k.length !== 16 && k.length !== 32) continue;
+        shareAes.decryptECB(k);
+        const at = decryptAttrs(n.a, nodeAesKey(k));
+        if (at) {
+          rec.n = typeof at.n === 'string' ? at.n : '';
+          const mt = fingerprintMtime(at.c);
+          if (mt) rec.mt = mt;
+          if (k.length === 32) rec.k = b64enc(k);
+          if (n.fa && k.length === 32) {
+            const ma = decodeMediaAttrs(n.fa, k);
+            if (ma && ma.playtime) rec.d = ma.playtime;
+            if (ma && ma.width) { rec.w = ma.width; rec.hh = ma.height; }
+          }
+          break;
+        }
+      }
+      if (rec.n === null) badKey++; else okKey++;
+    }
+    if (n.fa) rec.fa = n.fa;
+    out.push(rec);
+    if (i % SLICE === SLICE - 1) {
+      onProgress && onProgress({ phase: 'decrypt', done: i + 1, total: f.length });
+      await sleep(0, signal);
+    }
+  }
+  if (shareAes && okKey === 0 && badKey > 0) throw new MegaError(-14);
+  let rootH = root.h;
+  let nodes = out;
+  if (link.sub && link.sub !== root.h) {
+    // Restrict to the subtree of a /folder/SUB link.
+    const kids = new Map();
+    for (const r of out) { if (!kids.has(r.p)) kids.set(r.p, []); kids.get(r.p).push(r); }
+    const subRec = out.find((r) => r.h === link.sub);
+    if (!subRec) throw new LinkError('Subfolder from the link was not found inside the folder.');
+    nodes = [];
+    const stack = [subRec];
+    while (stack.length) {
+      const r = stack.pop();
+      nodes.push(r);
+      const ch = kids.get(r.h);
+      if (ch) for (const c of ch) stack.push(c);
+    }
+    subRec.p = '';
+    rootH = subRec.h;
+  }
+  onProgress && onProgress({ phase: 'done', done: f.length, total: f.length });
+  return { root: rootH, nodes, needsKey: !shareAes };
+}
+
+// ---------------------------------------------------------------- file attributes (thumbnails / previews)
+/**
+ * Fetch and decrypt server-generated thumbnails (type 0) or previews (type 1).
+ * items: [{id, fah (b64 8-byte handle), key (b64 32-byte node key)}], all on the same fa cluster.
+ * Many handles go in ONE POST; the reply is [8B handle][4B LE len][ciphertext]...
+ * Returns Map(id -> Uint8Array JPEG).
+ */
+async function fetchFileAttributes(api, folderId, type, items, { signal } = {}) {
+  if (!items.length) return new Map();
+  const servers = await faServers(api, folderId, items[0].fah, { signal });
+  return postFileAttributes(servers, type, items, { signal });
+}
+
+/**
+ * Ask the API which storage server holds a cluster's file attributes.
+ * The URL is reusable for the same cluster (measured: still valid well after
+ * first use), so callers cache it per folder+cluster and skip this round trip.
+ */
+async function faServers(api, folderId, fah, { signal } = {}) {
+  const res = await api.req({ a: 'ufa', fah, ssl: 2, r: 1 }, { n: folderId, signal });
+  if (!res || typeof res.p !== 'string') throw new Error('MEGA returned no file-attribute server');
+  const servers = [res.p];
+  for (let i = 0; typeof res['p' + i] === 'string'; i++) servers.push(res['p' + i]);
+  return servers;
+}
+
+/**
+ * POST many 8-byte handles (same cluster!) to the attribute server(s) and decrypt the reply.
+ * Server latency is ~1–1.5 s regardless of batch size, so batch generously.
+ */
+async function postFileAttributes(servers, type, items, { signal } = {}) {
+  const out = new Map();
+  const byHandle = new Map();
+  for (const it of items) {
+    const hb = b64dec(it.fah);
+    if (hb.length !== 8) continue;
+    const key = String.fromCharCode.apply(null, hb);
+    if (!byHandle.has(key)) byHandle.set(key, { hb, items: [] });
+    byHandle.get(key).items.push(it);
+  }
+  const groups = [...byHandle.values()];
+  if (!groups.length) return out;
+  // Split handles across the servers the API handed out (as the webclient does).
+  const per = Math.ceil(groups.length / servers.length);
+  await Promise.all(servers.map(async (srv, si) => {
+    const slice = groups.slice(si * per, (si + 1) * per);
+    if (!slice.length) return;
+    const body = new Uint8Array(slice.length * 8);
+    slice.forEach((g, i) => body.set(g.hb, i * 8));
+    const url = srv.replace(/^http:/, 'https:') + '/' + type;
+    const resp = await fetch(url, { method: 'POST', body, signal });
+    if (!resp.ok) throw new Error(`Thumbnail server HTTP ${resp.status}`);
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+    let i = 0;
+    while (i + 12 <= buf.length) {
+      const hkey = String.fromCharCode.apply(null, buf.subarray(i, i + 8));
+      const len = dv.getUint32(i + 8, true);
+      i += 12;
+      if (i + len > buf.length) break;
+      const g = byHandle.get(hkey);
+      if (g && len && len % 16 === 0) {
+        for (const it of g.items) {
+          const data = buf.slice(i, i + len);
+          new AES(nodeAesKey(b64dec(it.key))).decryptCBC(data);
+          // Trim zero padding after the JPEG EOI marker when present.
+          let end = data.length;
+          while (end > 2 && data[end - 1] === 0) end--;
+          out.set(it.id, data.subarray(0, end));
+        }
+      }
+      i += len;
+    }
+  }));
+  return out;
+}
+
+// ---------------------------------------------------------------- file content (AES-CTR, ranged)
+/** Key material for ranged decryption: {aes: 16B key, nonce: 8B}. */
+function fileCtrParams(key32b64) {
+  const k = b64dec(key32b64);
+  return { aes: nodeAesKey(k), nonce: k.slice(16, 24) };
+}
+
+/** Counter block for byte offset `pos` (must be a multiple of 16). */
+function ctrBlock(nonce, pos) {
+  const iv = new Uint8Array(16);
+  iv.set(nonce, 0);
+  let block = Math.floor(pos / 16);
+  for (let i = 15; i >= 8; i--) { iv[i] = block % 256; block = Math.floor(block / 256); }
+  return iv;
+}
+
+/**
+ * Decrypt `data` that starts at file offset `pos` (multiple of 16).
+ * Uses native WebCrypto AES-CTR when available, pure JS otherwise (e.g. insecure file:// contexts).
+ * `ctx` caches the imported CryptoKey: {aes, nonce, ck?, js?}
+ */
+async function ctrDecrypt(ctx, pos, data) {
+  const subtle = globalThis.crypto && globalThis.crypto.subtle;
+  if (subtle && !ctx.noSubtle) {
+    try {
+      if (!ctx.ck) ctx.ck = await subtle.importKey('raw', ctx.aes, 'AES-CTR', false, ['decrypt']);
+      return new Uint8Array(await subtle.decrypt({ name: 'AES-CTR', counter: ctrBlock(ctx.nonce, pos), length: 64 }, ctx.ck, data));
+    } catch (e) {
+      ctx.noSubtle = true;
+    }
+  }
+  const js = ctx.js || (ctx.js = new AES(ctx.aes));
+  const out = new Uint8Array(data.length);
+  const ks = new Uint8Array(16);
+  for (let off = 0; off < data.length; off += 16) {
+    ks.set(ctrBlock(ctx.nonce, pos + off));
+    js.encryptECB(ks);
+    const n = Math.min(16, data.length - off);
+    for (let i = 0; i < n; i++) out[off + i] = data[off + i] ^ ks[i];
+  }
+  return out;
+}
+
+/** Ask MEGA for a temporary download URL for a node inside a public folder. */
+async function getDownloadUrl(api, folderId, handle, { signal } = {}) {
+  const r = await api.req({ a: 'g', g: 1, ssl: 2, n: handle }, { n: folderId, signal });
+  if (!r || typeof r.g !== 'string' || !/^https?:/.test(r.g)) {
+    if (r && typeof r.e === 'number' && r.e < 0) throw new MegaError(r.e);
+    throw new Error('MEGA did not return a download URL (possibly rate limited).');
+  }
+  return { url: r.g.replace(/^http:/, 'https:'), size: r.s };
+}
+
+// ---------------------------------------------------------------- file typing
+const PHOTO_EXT = new Set(['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'webp', 'heic', 'heif', 'avif', 'bmp', 'tif', 'tiff', 'svg', 'dng', 'cr2', 'cr3', 'nef', 'arw', 'orf', 'rw2', 'raf']);
+const VIDEO_EXT = new Set(['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', 'wmv', 'flv', '3gp', '3g2', 'mpg', 'mpeg', 'ts', 'mts', 'm2ts', 'ogv', 'vob', 'f4v']);
+
+function extOf(name) {
+  const i = name ? name.lastIndexOf('.') : -1;
+  return i > 0 ? name.slice(i + 1).toLowerCase() : '';
+}
+
+/** 'folder' | 'photo' | 'video' | 'other' */
+function kindOf(rec) {
+  if (rec.t === 1) return 'folder';
+  const e = extOf(rec.n);
+  if (PHOTO_EXT.has(e)) return 'photo';
+  if (VIDEO_EXT.has(e)) return 'video';
+  if (rec.d && rec.w) return 'video'; // media attrs with a picture size, unknown extension
+  return 'other';
+}
+
+function mimeOf(name) {
+  const e = extOf(name);
+  return ({
+    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', '3gp': 'video/3gpp', webm: 'video/webm', mkv: 'video/webm',
+    ogv: 'video/ogg', ts: 'video/mp2t', avi: 'video/x-msvideo',
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+    webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml',
+    tif: 'image/tiff', tiff: 'image/tiff',
+  })[e] || 'application/octet-stream';
+}
+
+// idb.js — tiny IndexedDB helper shared by page, worker and service worker.
+// Every call degrades to a no-op when IndexedDB is unavailable (private mode,
+// some file:// contexts), so the app keeps working, just without caching.
+//
+// Stores:
+//   listings  {id: cacheId, root, nodes, needsKey, at}  decrypted folder trees
+//   thumbs    {id: nodeHandle, b: ArrayBuffer | none: 1, at}  server thumbnails (type 0)
+//   streams   {id: nodeHandle, folder, key, size, name, mime}  what the SW needs to stream a file
+
+const IDB_NAME = 'mega-gallery';
+const IDB_VERSION = 1;
+let idbPromise = null;
+
+function idbOpen() {
+  if (idbPromise) return idbPromise;
+  idbPromise = new Promise((resolve) => {
+    let req;
+    try {
+      req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    } catch {
+      return resolve(null);
+    }
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('listings')) db.createObjectStore('listings', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs', { keyPath: 'id' }).createIndex('at', 'at');
+      if (!db.objectStoreNames.contains('streams')) db.createObjectStore('streams', { keyPath: 'id' });
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    req.onerror = () => resolve(null);
+    req.onblocked = () => resolve(null);
+  });
+  return idbPromise;
+}
+
+function idbRun(store, mode, fn) {
+  return idbOpen().then((db) => new Promise((resolve) => {
+    if (!db) return resolve(undefined);
+    let result;
+    try {
+      const tx = db.transaction(store, mode);
+      result = fn(tx.objectStore(store));
+      tx.oncomplete = () => resolve(typeof result === 'function' ? result() : result);
+      tx.onerror = tx.onabort = () => resolve(undefined);
+    } catch {
+      resolve(undefined);
+    }
+  }));
+}
+
+function idbGet(store, key) {
+  return idbRun(store, 'readonly', (s) => {
+    const r = s.get(key);
+    return () => r.result;
+  });
+}
+
+function idbGetMany(store, keys) {
+  return idbRun(store, 'readonly', (s) => {
+    const reqs = keys.map((k) => s.get(k));
+    return () => reqs.map((r) => r.result);
+  }).then((v) => v || keys.map(() => undefined));
+}
+
+function idbPut(store, value) {
+  return idbRun(store, 'readwrite', (s) => { s.put(value); });
+}
+
+function idbPutMany(store, values) {
+  return idbRun(store, 'readwrite', (s) => { for (const v of values) s.put(v); });
+}
+
+function idbDelete(store, key) {
+  return idbRun(store, 'readwrite', (s) => { s.delete(key); });
+}
+
+function idbClear(store) {
+  return idbRun(store, 'readwrite', (s) => { s.clear(); });
+}
+
+function idbCount(store) {
+  return idbRun(store, 'readonly', (s) => {
+    const r = s.count();
+    return () => r.result || 0;
+  }).then((v) => v || 0);
+}
+
+/** Keep the thumbnail cache bounded: drop the oldest entries beyond `max`. */
+async function idbTrimThumbs(max) {
+  const n = await idbCount('thumbs');
+  if (n <= max) return 0;
+  let toDrop = n - Math.floor(max * 0.85);
+  const dropped = toDrop;
+  await idbRun('thumbs', 'readwrite', (s) => {
+    const cur = s.index('at').openKeyCursor();
+    cur.onsuccess = () => {
+      const c = cur.result;
+      if (!c || toDrop <= 0) return;
+      s.delete(c.primaryKey);
+      toDrop--;
+      c.continue();
+    };
+  });
+  return dropped;
+}
+
+const WORKER_SRC = "'use strict';\n// core.js — shared MEGA client code.\n// Runs unchanged in: the page, the walker/thumbnail Web Worker, the streaming\n// Service Worker, and Node (for tests). The build strips `export` and inlines it.\n//\n// Logic follows megajs v1.3 (API request + hashcash, key/attribute handling) and\n// MEGA's own webclient (file-attribute/thumbnail protocol, media attributes).\n\n// ---------------------------------------------------------------- base64url\nconst B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';\nconst B64_LUT = new Int16Array(128).fill(-1);\nfor (let i = 0; i < 64; i++) B64_LUT[B64_CHARS.charCodeAt(i)] = i;\nB64_LUT[43] = 62; // '+'\nB64_LUT[47] = 63; // '/'\n\nfunction b64dec(s) {\n  const out = new Uint8Array(((s.length * 3) >> 2) + 3);\n  let n = 0, buf = 0, bits = 0;\n  for (let i = 0; i < s.length; i++) {\n    const c = s.charCodeAt(i);\n    const v = c < 128 ? B64_LUT[c] : -1;\n    if (v < 0) continue;\n    buf = ((buf << 6) | v) & 0xffffff;\n    bits += 6;\n    if (bits >= 8) { bits -= 8; out[n++] = (buf >> bits) & 255; }\n  }\n  return out.slice(0, n);\n}\n\nfunction b64enc(u8) {\n  const C = B64_CHARS;\n  let s = '', i = 0;\n  for (; i + 2 < u8.length; i += 3) {\n    const v = (u8[i] << 16) | (u8[i + 1] << 8) | u8[i + 2];\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63] + C[(v >> 6) & 63] + C[v & 63];\n  }\n  if (u8.length - i === 1) {\n    const v = u8[i] << 16;\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63];\n  } else if (u8.length - i === 2) {\n    const v = (u8[i] << 16) | (u8[i + 1] << 8);\n    s += C[(v >> 18) & 63] + C[(v >> 12) & 63] + C[(v >> 6) & 63];\n  }\n  return s;\n}\n\nconst UTF8 = new TextDecoder();\n\n// ---------------------------------------------------------------- AES-128 (pure JS)\n// Table-based AES after SJCL. Synchronous and allocation-free per block, which\n// beats WebCrypto for the thousands of tiny ECB/CBC operations a folder needs.\nconst AES_T = (() => {\n  const enc = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint8Array(256)];\n  const dec = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint8Array(256)];\n  const sbox = enc[4], sboxInv = dec[4];\n  const d = new Uint8Array(256), th = new Uint8Array(256);\n  for (let i = 0; i < 256; i++) th[(d[i] = (i << 1) ^ ((i >> 7) * 283)) ^ i] = i;\n  let x, xInv, x2, x4, x8, s, tEnc, tDec;\n  for (x = xInv = 0; !sbox[x]; x ^= x2 || 1, xInv = th[xInv] || 1) {\n    s = xInv ^ (xInv << 1) ^ (xInv << 2) ^ (xInv << 3) ^ (xInv << 4);\n    s = (s >> 8) ^ (s & 255) ^ 99;\n    sbox[x] = s;\n    sboxInv[s] = x;\n    x8 = d[(x4 = d[(x2 = d[x])])];\n    tDec = (x8 * 0x1010101) ^ (x4 * 0x10001) ^ (x2 * 0x101) ^ (x * 0x1010100);\n    tEnc = (d[s] * 0x101) ^ (s * 0x1010100);\n    for (let i = 0; i < 4; i++) {\n      enc[i][x] = tEnc = (tEnc << 24) ^ (tEnc >>> 8);\n      dec[i][s] = tDec = (tDec << 24) ^ (tDec >>> 8);\n    }\n  }\n  return [enc, dec];\n})();\n\nclass AES {\n  constructor(key) {\n    if (!key || key.length !== 16) throw new Error('AES key must be 16 bytes');\n    const sbox = AES_T[0][4], decT = AES_T[1];\n    const ek = new Int32Array(44), dk = new Int32Array(44);\n    for (let i = 0; i < 4; i++) ek[i] = (key[4 * i] << 24) | (key[4 * i + 1] << 16) | (key[4 * i + 2] << 8) | key[4 * i + 3];\n    let i, j, tmp, rcon = 1;\n    for (i = 4; i < 44; i++) {\n      tmp = ek[i - 1];\n      if (i % 4 === 0) {\n        tmp = (sbox[tmp >>> 24] << 24) ^ (sbox[(tmp >> 16) & 255] << 16) ^ (sbox[(tmp >> 8) & 255] << 8) ^ sbox[tmp & 255];\n        tmp = (tmp << 8) ^ (tmp >>> 24) ^ (rcon << 24);\n        rcon = (rcon << 1) ^ ((rcon >> 7) * 283);\n      }\n      ek[i] = ek[i - 4] ^ tmp;\n    }\n    for (j = 0; i; j++, i--) {\n      tmp = ek[j & 3 ? i : i - 4];\n      dk[j] = i <= 4 || j < 4 ? tmp\n        : decT[0][sbox[tmp >>> 24]] ^ decT[1][sbox[(tmp >> 16) & 255]] ^ decT[2][sbox[(tmp >> 8) & 255]] ^ decT[3][sbox[tmp & 255]];\n    }\n    this.k = [ek, dk];\n    this.w = new Int32Array(4);\n    this.o = new Int32Array(4);\n  }\n\n  _crypt(dir) {\n    const inp = this.w, out = this.o, key = this.k[dir], T = AES_T[dir];\n    const t0 = T[0], t1 = T[1], t2 = T[2], t3 = T[3], sbox = T[4];\n    let a = inp[0] ^ key[0], b = inp[dir ? 3 : 1] ^ key[1], c = inp[2] ^ key[2], d = inp[dir ? 1 : 3] ^ key[3];\n    let a2, b2, c2, k = 4;\n    for (let r = 0; r < 9; r++) {\n      a2 = t0[a >>> 24] ^ t1[(b >> 16) & 255] ^ t2[(c >> 8) & 255] ^ t3[d & 255] ^ key[k];\n      b2 = t0[b >>> 24] ^ t1[(c >> 16) & 255] ^ t2[(d >> 8) & 255] ^ t3[a & 255] ^ key[k + 1];\n      c2 = t0[c >>> 24] ^ t1[(d >> 16) & 255] ^ t2[(a >> 8) & 255] ^ t3[b & 255] ^ key[k + 2];\n      d = t0[d >>> 24] ^ t1[(a >> 16) & 255] ^ t2[(b >> 8) & 255] ^ t3[c & 255] ^ key[k + 3];\n      k += 4; a = a2; b = b2; c = c2;\n    }\n    for (let r = 0; r < 4; r++) {\n      out[dir ? 3 & -r : r] = (sbox[a >>> 24] << 24) ^ (sbox[(b >> 16) & 255] << 16) ^ (sbox[(c >> 8) & 255] << 8) ^ sbox[d & 255] ^ key[k++];\n      a2 = a; a = b; b = c; c = d; d = a2;\n    }\n  }\n\n  _load(u8, off) {\n    const w = this.w;\n    for (let i = 0; i < 4; i++, off += 4) w[i] = (u8[off] << 24) | (u8[off + 1] << 16) | (u8[off + 2] << 8) | u8[off + 3];\n  }\n\n  _store(u8, off) {\n    const o = this.o;\n    for (let i = 0; i < 4; i++, off += 4) {\n      const v = o[i];\n      u8[off] = v >>> 24; u8[off + 1] = (v >> 16) & 255; u8[off + 2] = (v >> 8) & 255; u8[off + 3] = v & 255;\n    }\n  }\n\n  /** In-place ECB decrypt (MEGA uses this to unwrap node keys). */\n  decryptECB(u8) {\n    for (let off = 0; off + 16 <= u8.length; off += 16) { this._load(u8, off); this._crypt(1); this._store(u8, off); }\n    return u8;\n  }\n\n  encryptECB(u8) {\n    for (let off = 0; off + 16 <= u8.length; off += 16) { this._load(u8, off); this._crypt(0); this._store(u8, off); }\n    return u8;\n  }\n\n  /** In-place CBC decrypt, zero IV, no padding (node attributes and thumbnails). */\n  decryptCBC(u8) {\n    let p0 = 0, p1 = 0, p2 = 0, p3 = 0;\n    const w = this.w, o = this.o;\n    for (let off = 0; off + 16 <= u8.length; off += 16) {\n      this._load(u8, off);\n      const c0 = w[0], c1 = w[1], c2 = w[2], c3 = w[3];\n      this._crypt(1);\n      o[0] ^= p0; o[1] ^= p1; o[2] ^= p2; o[3] ^= p3;\n      this._store(u8, off);\n      p0 = c0; p1 = c1; p2 = c2; p3 = c3;\n    }\n    return u8;\n  }\n}\n\n// ---------------------------------------------------------------- keys & attributes\n/** 32-byte file key -> 16-byte AES key (k[0..15] XOR k[16..31]); folder keys pass through. */\nfunction nodeAesKey(k) {\n  if (k.length !== 32) return k;\n  const out = new Uint8Array(16);\n  for (let i = 0; i < 16; i++) out[i] = k[i] ^ k[i + 16];\n  return out;\n}\n\n/** Decrypt a node's `a` attribute blob. Returns {n, c, ...} or null when the key is wrong. */\nfunction decryptAttrs(aB64, key16) {\n  if (!aB64) return null;\n  const buf = b64dec(aB64);\n  if (!buf.length || buf.length % 16) return null;\n  new AES(key16).decryptCBC(buf);\n  let end = buf.length;\n  while (end > 0 && buf[end - 1] === 0) end--;\n  // 'MEGA{\"'\n  if (buf[0] !== 77 || buf[1] !== 69 || buf[2] !== 71 || buf[3] !== 65 || buf[4] !== 123 || buf[5] !== 34) return null;\n  const json = UTF8.decode(buf.subarray(4, end));\n  try {\n    return JSON.parse(json);\n  } catch {\n    const m = json.match(/\"n\"\\s*:\\s*\"((?:\\\\\"|[^\"])*)\"/);\n    return m ? { n: m[1] } : { n: 'MALFORMED_ATTRIBUTES' };\n  }\n}\n\n/** Original file mtime (unix seconds) encoded in the fingerprint attribute `c`. */\nfunction fingerprintMtime(c) {\n  if (typeof c !== 'string' || c.length < 24) return 0;\n  const b = b64dec(c);\n  if (b.length < 18) return 0;\n  const len = b[16];\n  if (!len || len > 8 || b.length < 17 + len) return 0;\n  let t = 0;\n  for (let i = len - 1; i >= 0; i--) t = t * 256 + b[17 + i];\n  // Reject nonsense (before 1980 or more than a year in the future).\n  return t > 315532800 && t < Date.now() / 1000 + 31536000 ? t : 0;\n}\n\n/** Parse a node's `fa` string (\"924:0*AbCd…/924:1*EfGh…/…:8*…\"). */\nfunction parseFa(fa) {\n  const r = {};\n  if (!fa) return r;\n  const re = /(\\d+):(\\d+)\\*([\\w-]+)/g;\n  let m;\n  while ((m = re.exec(fa))) {\n    const type = +m[2];\n    if (type === 0) r.thumb = { c: m[1], h: m[3] };\n    else if (type === 1) r.preview = { c: m[1], h: m[3] };\n  }\n  return r;\n}\n\n// XXTEA (media attributes, type 8/9 inside `fa`) — ported from MEGA webclient nodedec.js\nfunction xxteaDecrypt(v, k) {\n  const DELTA = 0x9e3779b9;\n  const int32 = (i) => i & 0xffffffff;\n  const mx = (sum, y, z, p, e) => (((z >>> 5) ^ (y << 2)) + ((y >>> 3) ^ (z << 4))) ^ ((sum ^ y) + (k[(p & 3) ^ e] ^ z));\n  const n = v.length - 1;\n  let y = v[0], z, sum, e, p;\n  const q = Math.floor(6 + 52 / v.length);\n  for (sum = int32(q * DELTA); sum !== 0; sum = int32(sum - DELTA)) {\n    e = (sum >>> 2) & 3;\n    for (p = n; p > 0; --p) {\n      z = v[p - 1];\n      y = v[p] = int32(v[p] - mx(sum, y, z, p, e));\n    }\n    z = v[n];\n    y = v[0] = int32(v[0] - mx(sum, y, z, 0, e));\n  }\n  return v;\n}\n\n/** Decode width/height/fps/duration from the inline `:8*` media attribute. Zero network. */\nfunction decodeMediaAttrs(fa, key32) {\n  if (!fa || !key32 || key32.length !== 32) return null;\n  const pos = fa.indexOf(':8*');\n  if (pos < 0) return null;\n  const raw = b64dec(fa.substr(pos + 3, 11));\n  if (raw.length < 8) return null;\n  const v = new Uint32Array(2);\n  v[0] = raw[0] | (raw[1] << 8) | (raw[2] << 16) | (raw[3] << 24);\n  v[1] = raw[4] | (raw[5] << 8) | (raw[6] << 16) | (raw[7] << 24);\n  const k = new Uint32Array(4);\n  for (let i = 0; i < 4; i++) {\n    const o = 16 + i * 4;\n    k[i] = (key32[o] << 24) | (key32[o + 1] << 16) | (key32[o + 2] << 8) | key32[o + 3];\n  }\n  xxteaDecrypt(v, k);\n  const b = new Uint8Array(8);\n  for (let i = 0; i < 2; i++) {\n    b[i * 4] = v[i] & 255; b[i * 4 + 1] = (v[i] >>> 8) & 255; b[i * 4 + 2] = (v[i] >>> 16) & 255; b[i * 4 + 3] = v[i] >>> 24;\n  }\n  let width = (b[0] >> 1) + ((b[1] & 127) << 7);\n  if (b[0] & 1) width = (width << 3) + 16384;\n  let height = b[2] + ((b[3] & 63) << 8);\n  if (b[1] & 128) height = (height << 3) + 16384;\n  let fps = (b[3] >> 7) + ((b[4] & 63) << 1);\n  if (b[3] & 64) fps = (fps << 3) + 128;\n  let playtime = (b[4] >> 7) + (b[5] << 1) + (b[6] << 9);\n  if (b[4] & 64) playtime = playtime * 60 + 131100;\n  return { width, height, fps, playtime };\n}\n\n// ---------------------------------------------------------------- links\nclass LinkError extends Error {}\n\n/**\n * Normalise a pasted MEGA folder link. Accepts:\n *   https://mega.nz/folder/ID#KEY            (+ /folder/SUB or /file/FILE suffix)\n *   https://mega.nz/#F!ID!KEY                (+ !SUB)\n *   mega.co.nz / www. variants, missing scheme, surrounding text/quotes/<>,\n *   links with no key (key can be supplied later).\n */\nfunction parseMegaLink(input) {\n  let s = String(input || '').trim();\n  if (!s) throw new LinkError('Paste a MEGA folder link.');\n  // Pull the first mega URL out of surrounding text.\n  const m = s.match(/(?:https?:\\/\\/)?(?:www\\.)?mega(?:\\.co)?\\.nz\\/[^\\s\"'<>]+/i) || s.match(/#?F![\\w-]+(?:![\\w-]*)*/);\n  if (m) s = m[0];\n  s = s.replace(/\\s+/g, '').replace(/[)\\].,;]+$/, '');\n  try { s = decodeURIComponent(s); } catch { /* keep as-is */ }\n\n  let id, key = null, sub = null;\n  let mm;\n  if ((mm = s.match(/\\/(file|folder|embed)\\/([\\w-]+)(?:#([\\w-]*))?(.*)$/i))) {\n    if (mm[1].toLowerCase() !== 'folder') throw new LinkError('That is a single-file link. Paste a folder link (mega.nz/folder/…).');\n    id = mm[2];\n    key = mm[3] || null;\n    const rest = mm[4] || '';\n    const subm = rest.match(/\\/folder\\/([\\w-]+)/i);\n    if (subm) sub = subm[1];\n  } else if ((mm = s.match(/#?(F?)!([\\w-]+)(?:!([\\w-]*))?(?:!([\\w-]+))?/))) {\n    if (!mm[1]) throw new LinkError('That is a single-file link. Paste a folder link (#F!…).');\n    id = mm[2];\n    key = mm[3] || null;\n    sub = mm[4] || null;\n  } else {\n    throw new LinkError('Not a MEGA folder link. Expected mega.nz/folder/ID#KEY or mega.nz/#F!ID!KEY.');\n  }\n  if (!/^[\\w-]{8}$/.test(id)) throw new LinkError(`Folder ID \"${id}\" should be 8 characters.`);\n  if (key !== null && !/^[\\w-]{22}$/.test(key)) throw new LinkError(`Decryption key should be 22 characters (got ${key.length}).`);\n  if (sub !== null && !/^[\\w-]{8}$/.test(sub)) sub = null;\n  return { id, key, sub, url: canonicalLink(id, key, sub) };\n}\n\nfunction canonicalLink(id, key, sub) {\n  return `https://mega.nz/folder/${id}${key ? '#' + key : ''}${sub ? '/folder/' + sub : ''}`;\n}\n\n// ---------------------------------------------------------------- API\nconst API_ERRORS = {\n  '-1': 'MEGA internal error', '-2': 'Invalid request', '-3': 'MEGA is busy, try again',\n  '-4': 'Rate limited by MEGA, slow down', '-6': 'Too many requests', '-8': 'Link expired',\n  '-9': 'Not found: the folder was deleted or the link is wrong', '-11': 'Access denied',\n  '-14': 'Wrong decryption key', '-15': 'Session expired', '-16': 'This link was taken down or blocked',\n  '-17': 'Transfer quota exceeded', '-18': 'Temporarily unavailable', '-19': 'Too many connections',\n};\n\nclass MegaError extends Error {\n  constructor(code, extra) {\n    super((API_ERRORS[code] || `MEGA error ${code}`) + (extra ? ` (${extra})` : ''));\n    this.code = code;\n  }\n}\n\nfunction sleep(ms, signal) {\n  return new Promise((resolve, reject) => {\n    if (signal && signal.aborted) return reject(new DOMException('Aborted', 'AbortError'));\n    const t = setTimeout(resolve, ms);\n    if (signal) signal.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });\n  });\n}\n\n// Port of megajs generateHashcashToken (MEGA's anti-abuse proof-of-work).\nasync function solveHashcash(challenge) {\n  const [versionStr, easinessStr, , tokenStr] = challenge.split(':');\n  if (Number(versionStr) !== 1) throw new Error('Unsupported MEGA hashcash challenge');\n  const easiness = Number(easinessStr);\n  const base = ((easiness & 63) << 1) + 1;\n  const shifts = (easiness >> 6) * 7 + 3;\n  const threshold = base << shifts;\n  const token = b64dec(tokenStr);\n  const buffer = new Uint8Array(4 + 262144 * 48);\n  for (let i = 0; i < 262144; i++) buffer.set(token, 4 + i * 48);\n  for (;;) {\n    const view = new DataView(await crypto.subtle.digest('SHA-256', buffer));\n    if (view.getUint32(0) <= threshold) return `1:${tokenStr}:${b64enc(buffer.slice(0, 4))}`;\n    let j = 0;\n    for (;;) { buffer[j]++; if (buffer[j++]) break; }\n  }\n}\n\n/** Minimal MEGA API client: request sequencing, polite concurrency, EAGAIN backoff, hashcash. */\nclass MegaApi {\n  constructor(opts = {}) {\n    this.gateway = opts.gateway || 'https://g.api.mega.co.nz/';\n    this.seq = Math.floor(Math.random() * 1e9);\n    this.max = opts.maxConcurrent || 3;\n    this.active = 0;\n    this.waiters = [];\n  }\n\n  async req(payload, opts = {}) {\n    if (this.active >= this.max) await new Promise((r) => this.waiters.push(r));\n    this.active++;\n    try { return await this._req(payload, opts); } finally {\n      this.active--;\n      const next = this.waiters.shift();\n      if (next) next();\n    }\n  }\n\n  async _req(payload, { n, signal } = {}) {\n    let hashcash = null, busy = 0, netRetry = false, hcTries = 0;\n    for (;;) {\n      const qs = `id=${++this.seq}${n ? '&n=' + encodeURIComponent(n) : ''}`;\n      const headers = { 'Content-Type': 'application/json' };\n      if (hashcash) headers['X-Hashcash'] = hashcash;\n      let res;\n      try {\n        res = await fetch(`${this.gateway}cs?${qs}`, { method: 'POST', headers, body: JSON.stringify([payload]), signal });\n      } catch (e) {\n        if (e.name === 'AbortError' || (signal && signal.aborted)) throw e;\n        if (netRetry) throw new Error(`Network error talking to MEGA (${e.message})`);\n        netRetry = true; // retry-once for plain network failures\n        await sleep(1200, signal);\n        continue;\n      }\n      const challenge = res.headers.get('X-Hashcash');\n      if (challenge && hcTries++ < 3) { hashcash = await solveHashcash(challenge); continue; }\n      if (res.status >= 500 || res.status === 429) {\n        if (busy++ < 4) { await sleep(600 * 2 ** busy + Math.random() * 400, signal); continue; }\n        throw new Error(`MEGA API unavailable (HTTP ${res.status})`);\n      }\n      if (!res.ok) throw new Error(`MEGA API HTTP ${res.status}`);\n      const json = await res.json();\n      const r = Array.isArray(json) ? json[0] : json;\n      if (typeof r === 'number' && r < 0) {\n        if ((r === -3 || r === -4 || r === -6) && busy++ < 5) { await sleep(500 * 2 ** busy + Math.random() * 500, signal); continue; }\n        throw new MegaError(r);\n      }\n      return r;\n    }\n  }\n}\n\n// ---------------------------------------------------------------- folder listing\n/**\n * One `f` call with r:1 returns the whole tree under a public folder link.\n * Decrypts keys/attributes in slices, yielding between slices.\n * Returns compact records: {h,p,t,s,ts,mt,n,k,fa,d,w,hh}\n */\nasync function listFolder(api, link, { signal, onProgress } = {}) {\n  onProgress && onProgress({ phase: 'fetch' });\n  const resp = await api.req({ a: 'f', c: 1, ca: 1, r: 1 }, { n: link.id, signal });\n  const f = (resp && resp.f) || [];\n  if (!f.length) throw new MegaError(-9);\n  return decryptListing(f, link, { signal, onProgress });\n}\n\nasync function decryptListing(f, link, { signal, onProgress } = {}) {\n  const shareAes = link.key ? new AES(b64dec(link.key)) : null;\n  const root = f.find((n) => typeof n.k === 'string' && n.k.split('/').some((p) => p.split(':')[0] === n.h)) || f.find((n) => n.t === 1) || f[0];\n  const out = [];\n  let badKey = 0, okKey = 0;\n  const SLICE = 1500;\n  for (let i = 0; i < f.length; i++) {\n    const n = f[i];\n    const rec = { h: n.h, p: n.h === root.h ? '' : n.p, t: n.t === 1 ? 1 : 0, s: n.s || 0, ts: n.ts || 0, mt: n.ts || 0, n: null };\n    if (shareAes && typeof n.k === 'string') {\n      const parts = n.k.split('/');\n      // Prefer the entry keyed by the share root.\n      parts.sort((a, b) => (b.startsWith(root.h + ':') ? 1 : 0) - (a.startsWith(root.h + ':') ? 1 : 0));\n      for (const part of parts) {\n        const kb = part.slice(part.indexOf(':') + 1);\n        if (!kb || kb.length >= 44) continue; // RSA-wrapped keys are for logged-in owners only\n        const k = b64dec(kb);\n        if (k.length !== 16 && k.length !== 32) continue;\n        shareAes.decryptECB(k);\n        const at = decryptAttrs(n.a, nodeAesKey(k));\n        if (at) {\n          rec.n = typeof at.n === 'string' ? at.n : '';\n          const mt = fingerprintMtime(at.c);\n          if (mt) rec.mt = mt;\n          if (k.length === 32) rec.k = b64enc(k);\n          if (n.fa && k.length === 32) {\n            const ma = decodeMediaAttrs(n.fa, k);\n            if (ma && ma.playtime) rec.d = ma.playtime;\n            if (ma && ma.width) { rec.w = ma.width; rec.hh = ma.height; }\n          }\n          break;\n        }\n      }\n      if (rec.n === null) badKey++; else okKey++;\n    }\n    if (n.fa) rec.fa = n.fa;\n    out.push(rec);\n    if (i % SLICE === SLICE - 1) {\n      onProgress && onProgress({ phase: 'decrypt', done: i + 1, total: f.length });\n      await sleep(0, signal);\n    }\n  }\n  if (shareAes && okKey === 0 && badKey > 0) throw new MegaError(-14);\n  let rootH = root.h;\n  let nodes = out;\n  if (link.sub && link.sub !== root.h) {\n    // Restrict to the subtree of a /folder/SUB link.\n    const kids = new Map();\n    for (const r of out) { if (!kids.has(r.p)) kids.set(r.p, []); kids.get(r.p).push(r); }\n    const subRec = out.find((r) => r.h === link.sub);\n    if (!subRec) throw new LinkError('Subfolder from the link was not found inside the folder.');\n    nodes = [];\n    const stack = [subRec];\n    while (stack.length) {\n      const r = stack.pop();\n      nodes.push(r);\n      const ch = kids.get(r.h);\n      if (ch) for (const c of ch) stack.push(c);\n    }\n    subRec.p = '';\n    rootH = subRec.h;\n  }\n  onProgress && onProgress({ phase: 'done', done: f.length, total: f.length });\n  return { root: rootH, nodes, needsKey: !shareAes };\n}\n\n// ---------------------------------------------------------------- file attributes (thumbnails / previews)\n/**\n * Fetch and decrypt server-generated thumbnails (type 0) or previews (type 1).\n * items: [{id, fah (b64 8-byte handle), key (b64 32-byte node key)}], all on the same fa cluster.\n * Many handles go in ONE POST; the reply is [8B handle][4B LE len][ciphertext]...\n * Returns Map(id -> Uint8Array JPEG).\n */\nasync function fetchFileAttributes(api, folderId, type, items, { signal } = {}) {\n  if (!items.length) return new Map();\n  const servers = await faServers(api, folderId, items[0].fah, { signal });\n  return postFileAttributes(servers, type, items, { signal });\n}\n\n/**\n * Ask the API which storage server holds a cluster's file attributes.\n * The URL is reusable for the same cluster (measured: still valid well after\n * first use), so callers cache it per folder+cluster and skip this round trip.\n */\nasync function faServers(api, folderId, fah, { signal } = {}) {\n  const res = await api.req({ a: 'ufa', fah, ssl: 2, r: 1 }, { n: folderId, signal });\n  if (!res || typeof res.p !== 'string') throw new Error('MEGA returned no file-attribute server');\n  const servers = [res.p];\n  for (let i = 0; typeof res['p' + i] === 'string'; i++) servers.push(res['p' + i]);\n  return servers;\n}\n\n/**\n * POST many 8-byte handles (same cluster!) to the attribute server(s) and decrypt the reply.\n * Server latency is ~1–1.5 s regardless of batch size, so batch generously.\n */\nasync function postFileAttributes(servers, type, items, { signal } = {}) {\n  const out = new Map();\n  const byHandle = new Map();\n  for (const it of items) {\n    const hb = b64dec(it.fah);\n    if (hb.length !== 8) continue;\n    const key = String.fromCharCode.apply(null, hb);\n    if (!byHandle.has(key)) byHandle.set(key, { hb, items: [] });\n    byHandle.get(key).items.push(it);\n  }\n  const groups = [...byHandle.values()];\n  if (!groups.length) return out;\n  // Split handles across the servers the API handed out (as the webclient does).\n  const per = Math.ceil(groups.length / servers.length);\n  await Promise.all(servers.map(async (srv, si) => {\n    const slice = groups.slice(si * per, (si + 1) * per);\n    if (!slice.length) return;\n    const body = new Uint8Array(slice.length * 8);\n    slice.forEach((g, i) => body.set(g.hb, i * 8));\n    const url = srv.replace(/^http:/, 'https:') + '/' + type;\n    const resp = await fetch(url, { method: 'POST', body, signal });\n    if (!resp.ok) throw new Error(`Thumbnail server HTTP ${resp.status}`);\n    const buf = new Uint8Array(await resp.arrayBuffer());\n    const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);\n    let i = 0;\n    while (i + 12 <= buf.length) {\n      const hkey = String.fromCharCode.apply(null, buf.subarray(i, i + 8));\n      const len = dv.getUint32(i + 8, true);\n      i += 12;\n      if (i + len > buf.length) break;\n      const g = byHandle.get(hkey);\n      if (g && len && len % 16 === 0) {\n        for (const it of g.items) {\n          const data = buf.slice(i, i + len);\n          new AES(nodeAesKey(b64dec(it.key))).decryptCBC(data);\n          // Trim zero padding after the JPEG EOI marker when present.\n          let end = data.length;\n          while (end > 2 && data[end - 1] === 0) end--;\n          out.set(it.id, data.subarray(0, end));\n        }\n      }\n      i += len;\n    }\n  }));\n  return out;\n}\n\n// ---------------------------------------------------------------- file content (AES-CTR, ranged)\n/** Key material for ranged decryption: {aes: 16B key, nonce: 8B}. */\nfunction fileCtrParams(key32b64) {\n  const k = b64dec(key32b64);\n  return { aes: nodeAesKey(k), nonce: k.slice(16, 24) };\n}\n\n/** Counter block for byte offset `pos` (must be a multiple of 16). */\nfunction ctrBlock(nonce, pos) {\n  const iv = new Uint8Array(16);\n  iv.set(nonce, 0);\n  let block = Math.floor(pos / 16);\n  for (let i = 15; i >= 8; i--) { iv[i] = block % 256; block = Math.floor(block / 256); }\n  return iv;\n}\n\n/**\n * Decrypt `data` that starts at file offset `pos` (multiple of 16).\n * Uses native WebCrypto AES-CTR when available, pure JS otherwise (e.g. insecure file:// contexts).\n * `ctx` caches the imported CryptoKey: {aes, nonce, ck?, js?}\n */\nasync function ctrDecrypt(ctx, pos, data) {\n  const subtle = globalThis.crypto && globalThis.crypto.subtle;\n  if (subtle && !ctx.noSubtle) {\n    try {\n      if (!ctx.ck) ctx.ck = await subtle.importKey('raw', ctx.aes, 'AES-CTR', false, ['decrypt']);\n      return new Uint8Array(await subtle.decrypt({ name: 'AES-CTR', counter: ctrBlock(ctx.nonce, pos), length: 64 }, ctx.ck, data));\n    } catch (e) {\n      ctx.noSubtle = true;\n    }\n  }\n  const js = ctx.js || (ctx.js = new AES(ctx.aes));\n  const out = new Uint8Array(data.length);\n  const ks = new Uint8Array(16);\n  for (let off = 0; off < data.length; off += 16) {\n    ks.set(ctrBlock(ctx.nonce, pos + off));\n    js.encryptECB(ks);\n    const n = Math.min(16, data.length - off);\n    for (let i = 0; i < n; i++) out[off + i] = data[off + i] ^ ks[i];\n  }\n  return out;\n}\n\n/** Ask MEGA for a temporary download URL for a node inside a public folder. */\nasync function getDownloadUrl(api, folderId, handle, { signal } = {}) {\n  const r = await api.req({ a: 'g', g: 1, ssl: 2, n: handle }, { n: folderId, signal });\n  if (!r || typeof r.g !== 'string' || !/^https?:/.test(r.g)) {\n    if (r && typeof r.e === 'number' && r.e < 0) throw new MegaError(r.e);\n    throw new Error('MEGA did not return a download URL (possibly rate limited).');\n  }\n  return { url: r.g.replace(/^http:/, 'https:'), size: r.s };\n}\n\n// ---------------------------------------------------------------- file typing\nconst PHOTO_EXT = new Set(['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'webp', 'heic', 'heif', 'avif', 'bmp', 'tif', 'tiff', 'svg', 'dng', 'cr2', 'cr3', 'nef', 'arw', 'orf', 'rw2', 'raf']);\nconst VIDEO_EXT = new Set(['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', 'wmv', 'flv', '3gp', '3g2', 'mpg', 'mpeg', 'ts', 'mts', 'm2ts', 'ogv', 'vob', 'f4v']);\n\nfunction extOf(name) {\n  const i = name ? name.lastIndexOf('.') : -1;\n  return i > 0 ? name.slice(i + 1).toLowerCase() : '';\n}\n\n/** 'folder' | 'photo' | 'video' | 'other' */\nfunction kindOf(rec) {\n  if (rec.t === 1) return 'folder';\n  const e = extOf(rec.n);\n  if (PHOTO_EXT.has(e)) return 'photo';\n  if (VIDEO_EXT.has(e)) return 'video';\n  if (rec.d && rec.w) return 'video'; // media attrs with a picture size, unknown extension\n  return 'other';\n}\n\nfunction mimeOf(name) {\n  const e = extOf(name);\n  return ({\n    mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/mp4', '3gp': 'video/3gpp', webm: 'video/webm', mkv: 'video/webm',\n    ogv: 'video/ogg', ts: 'video/mp2t', avi: 'video/x-msvideo',\n    jpg: 'image/jpeg', jpeg: 'image/jpeg', jpe: 'image/jpeg', jfif: 'image/jpeg', png: 'image/png', gif: 'image/gif',\n    webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml',\n    tif: 'image/tiff', tiff: 'image/tiff',\n  })[e] || 'application/octet-stream';\n}\n\n// idb.js — tiny IndexedDB helper shared by page, worker and service worker.\n// Every call degrades to a no-op when IndexedDB is unavailable (private mode,\n// some file:// contexts), so the app keeps working, just without caching.\n//\n// Stores:\n//   listings  {id: cacheId, root, nodes, needsKey, at}  decrypted folder trees\n//   thumbs    {id: nodeHandle, b: ArrayBuffer | none: 1, at}  server thumbnails (type 0)\n//   streams   {id: nodeHandle, folder, key, size, name, mime}  what the SW needs to stream a file\n\nconst IDB_NAME = 'mega-gallery';\nconst IDB_VERSION = 1;\nlet idbPromise = null;\n\nfunction idbOpen() {\n  if (idbPromise) return idbPromise;\n  idbPromise = new Promise((resolve) => {\n    let req;\n    try {\n      req = indexedDB.open(IDB_NAME, IDB_VERSION);\n    } catch {\n      return resolve(null);\n    }\n    req.onupgradeneeded = () => {\n      const db = req.result;\n      if (!db.objectStoreNames.contains('listings')) db.createObjectStore('listings', { keyPath: 'id' });\n      if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs', { keyPath: 'id' }).createIndex('at', 'at');\n      if (!db.objectStoreNames.contains('streams')) db.createObjectStore('streams', { keyPath: 'id' });\n    };\n    req.onsuccess = () => {\n      const db = req.result;\n      db.onversionchange = () => db.close();\n      resolve(db);\n    };\n    req.onerror = () => resolve(null);\n    req.onblocked = () => resolve(null);\n  });\n  return idbPromise;\n}\n\nfunction idbRun(store, mode, fn) {\n  return idbOpen().then((db) => new Promise((resolve) => {\n    if (!db) return resolve(undefined);\n    let result;\n    try {\n      const tx = db.transaction(store, mode);\n      result = fn(tx.objectStore(store));\n      tx.oncomplete = () => resolve(typeof result === 'function' ? result() : result);\n      tx.onerror = tx.onabort = () => resolve(undefined);\n    } catch {\n      resolve(undefined);\n    }\n  }));\n}\n\nfunction idbGet(store, key) {\n  return idbRun(store, 'readonly', (s) => {\n    const r = s.get(key);\n    return () => r.result;\n  });\n}\n\nfunction idbGetMany(store, keys) {\n  return idbRun(store, 'readonly', (s) => {\n    const reqs = keys.map((k) => s.get(k));\n    return () => reqs.map((r) => r.result);\n  }).then((v) => v || keys.map(() => undefined));\n}\n\nfunction idbPut(store, value) {\n  return idbRun(store, 'readwrite', (s) => { s.put(value); });\n}\n\nfunction idbPutMany(store, values) {\n  return idbRun(store, 'readwrite', (s) => { for (const v of values) s.put(v); });\n}\n\nfunction idbDelete(store, key) {\n  return idbRun(store, 'readwrite', (s) => { s.delete(key); });\n}\n\nfunction idbClear(store) {\n  return idbRun(store, 'readwrite', (s) => { s.clear(); });\n}\n\nfunction idbCount(store) {\n  return idbRun(store, 'readonly', (s) => {\n    const r = s.count();\n    return () => r.result || 0;\n  }).then((v) => v || 0);\n}\n\n/** Keep the thumbnail cache bounded: drop the oldest entries beyond `max`. */\nasync function idbTrimThumbs(max) {\n  const n = await idbCount('thumbs');\n  if (n <= max) return 0;\n  let toDrop = n - Math.floor(max * 0.85);\n  const dropped = toDrop;\n  await idbRun('thumbs', 'readwrite', (s) => {\n    const cur = s.index('at').openKeyCursor();\n    cur.onsuccess = () => {\n      const c = cur.result;\n      if (!c || toDrop <= 0) return;\n      s.delete(c.primaryKey);\n      toDrop--;\n      c.continue();\n    };\n  });\n  return dropped;\n}\n\n// worker.js — Web Worker: folder walks, thumbnail fetch/decrypt/cache, previews,\n// and the no-service-worker fallback download. Keeps all crypto and JSON parsing\n// of large listings off the main thread. Uses symbols from core.js and idb.js.\n// Can also run in-page (same code, `self` shimmed) if a Worker can't be created.\n\nconst api = new MegaApi({ maxConcurrent: 3 });\nconst jobs = new Map(); // job -> AbortController\nconst post = (msg, transfer) => self.postMessage(msg, transfer || []);\n\nconst THUMB_CACHE_MAX = 30000; // ~300–400 MB worst case; oldest dropped first\nconst BATCH_MAX = 120;          // handles per POST (latency is flat in batch size)\nconst MAX_ACTIVE = 6;           // concurrent attribute POSTs (each to a different cluster)\nconst CLUSTER_URL_TTL = 15 * 60 * 1000;\n\nself.onmessage = (e) => {\n  const m = e.data;\n  handle(m).catch((err) => {\n    if (m.req) post({ type: 'res', req: m.req, error: String(err && err.message || err) });\n  });\n};\n\nasync function handle(m) {\n  switch (m.type) {\n    case 'ping': return post({ type: 'pong' });\n    case 'list': return doList(m);\n    case 'cancel': { const ac = jobs.get(m.job); if (ac) ac.abort(); return; }\n    case 'cached': return doCached(m);\n    case 'forget': await idbDelete('listings', m.cid); return;\n    case 'thumbs': return setWanted(m.want);\n    case 'preview': return doPreview(m);\n    case 'full': return doFull(m);\n    case 'cacheStats': return post({ type: 'res', req: m.req, thumbs: await idbCount('thumbs') });\n    case 'clearThumbs': await idbClear('thumbs'); return post({ type: 'res', req: m.req, ok: true });\n  }\n}\n\n// ------------------------------------------------------------ tree walk\nasync function doList(m) {\n  const ac = new AbortController();\n  jobs.set(m.job, ac);\n  try {\n    let last = 0;\n    const res = await listFolder(api, m.link, {\n      signal: ac.signal,\n      onProgress: (p) => {\n        const now = Date.now();\n        if (p.phase !== 'decrypt' || now - last > 120) { last = now; post({ type: 'progress', job: m.job, ...p }); }\n      },\n    });\n    const data = { id: m.cid, root: res.root, nodes: res.nodes, needsKey: res.needsKey, at: Date.now() };\n    post({ type: 'listed', job: m.job, cid: m.cid, data });\n    idbPut('listings', data);\n  } catch (err) {\n    post({ type: 'listError', job: m.job, cid: m.cid, error: String(err.message || err), code: err.code, aborted: err.name === 'AbortError' });\n  } finally {\n    jobs.delete(m.job);\n  }\n}\n\nasync function doCached(m) {\n  const rows = await idbGetMany('listings', m.cids);\n  post({ type: 'res', req: m.req, rows: rows.map((r) => r || null) });\n}\n\n// ------------------------------------------------------------ thumbnails\n// The page sends its full \"want list\" (visible tiles first, then prefetch) whenever\n// the viewport settles. We serve IndexedDB hits immediately, then fetch misses from\n// MEGA in per-cluster batches, highest-priority cluster first.\nconst T = {\n  wanted: new Map(),   // id -> item, in priority order\n  lookup: new Set(),   // ids with an IDB lookup in flight\n  pending: new Map(),  // id -> item waiting for network\n  inflight: new Set(),\n  busy: new Set(),     // cluster keys with a POST in flight\n  active: 0,\n  urls: new Map(),     // cluster key -> {servers, at}\n};\n\nasync function setWanted(list) {\n  T.wanted = new Map(list.map((it) => [it.id, it]));\n  const check = list.filter((it) => !T.lookup.has(it.id) && !T.pending.has(it.id) && !T.inflight.has(it.id));\n  if (check.length) {\n    for (const it of check) T.lookup.add(it.id);\n    const rows = await idbGetMany('thumbs', check.map((it) => it.id));\n    check.forEach((it, i) => {\n      T.lookup.delete(it.id);\n      const row = rows[i];\n      if (row && row.b) post({ type: 'thumb', id: it.id, buf: row.b, cached: true }, [row.b]);\n      else if (row && row.none) post({ type: 'thumb', id: it.id, none: true });\n      else T.pending.set(it.id, it);\n    });\n  }\n  pump();\n}\n\nfunction pump() {\n  while (T.active < MAX_ACTIVE) {\n    const groups = new Map();\n    let best = null;\n    for (const id of T.wanted.keys()) {\n      const it = T.pending.get(id);\n      if (!it) continue;\n      const ck = it.folder + ':' + it.c;\n      if (T.busy.has(ck)) continue;\n      let g = groups.get(ck);\n      if (!g) { groups.set(ck, (g = [])); if (!best) best = ck; }\n      if (g.length < BATCH_MAX) g.push(it);\n    }\n    if (!best) return;\n    const items = groups.get(best);\n    for (const it of items) { T.pending.delete(it.id); T.inflight.add(it.id); }\n    T.busy.add(best);\n    T.active++;\n    runBatch(best, items).finally(() => {\n      T.busy.delete(best);\n      T.active--;\n      pump();\n    });\n  }\n}\n\nasync function clusterServers(ck, folder, fah, fresh) {\n  const hit = T.urls.get(ck);\n  if (!fresh && hit && Date.now() - hit.at < CLUSTER_URL_TTL) return hit.servers;\n  const servers = await faServers(api, folder, fah);\n  T.urls.set(ck, { servers, at: Date.now() });\n  return servers;\n}\n\nasync function runBatch(ck, items) {\n  let got = null;\n  for (let attempt = 0; attempt < 2 && !got; attempt++) {\n    try {\n      const servers = await clusterServers(ck, items[0].folder, items[0].fah, attempt > 0);\n      got = await postFileAttributes(servers, 0, items.map((it) => ({ id: it.id, fah: it.fah, key: it.k })));\n    } catch (err) {\n      console.warn('[mega-gallery worker] thumbnail batch failed', ck, err);\n      T.urls.delete(ck);\n      if (attempt === 0) await sleep(700 + Math.random() * 600);\n    }\n  }\n  const now = Date.now();\n  const puts = [];\n  for (const it of items) {\n    T.inflight.delete(it.id);\n    if (!got) { post({ type: 'thumb', id: it.id, error: true }); continue; }\n    const data = got.get(it.id);\n    if (data && data.length) {\n      const buf = data.slice().buffer;\n      puts.push({ id: it.id, b: buf.slice(0), at: now });\n      post({ type: 'thumb', id: it.id, buf }, [buf]);\n    } else {\n      puts.push({ id: it.id, none: 1, at: now });\n      post({ type: 'thumb', id: it.id, none: true });\n    }\n  }\n  if (puts.length) {\n    await idbPutMany('thumbs', puts);\n    if (Math.random() < 0.05) idbTrimThumbs(THUMB_CACHE_MAX);\n  }\n}\n\n// ------------------------------------------------------------ previews (type 1, ~1000px) — transient, not cached\nasync function doPreview(m) {\n  const ck = m.folder + ':' + m.c;\n  let got = null, lastErr = null;\n  for (let attempt = 0; attempt < 2 && !got; attempt++) {\n    try {\n      const servers = await clusterServers(ck, m.folder, m.fah, attempt > 0);\n      got = await postFileAttributes(servers, 1, [{ id: m.id, fah: m.fah, key: m.k }]);\n    } catch (err) { lastErr = err; }\n  }\n  const data = got && got.get(m.id);\n  if (data && data.length) {\n    const buf = data.slice().buffer;\n    post({ type: 'res', req: m.req, buf }, [buf]);\n  } else {\n    post({ type: 'res', req: m.req, error: lastErr ? String(lastErr.message) : 'No preview' });\n  }\n}\n\n// ------------------------------------------------------------ fallback full download (no service worker)\n// Only used when streaming via the service worker isn't possible (file://, SW blocked).\n// Downloads in 4 MB ranges, decrypts with AES-CTR, returns one ArrayBuffer.\nasync function doFull(m) {\n  const ac = new AbortController();\n  jobs.set(m.req, ac);\n  try {\n    const { url } = await getDownloadUrl(api, m.folder, m.id, { signal: ac.signal });\n    const ctx = fileCtrParams(m.k);\n    const out = new Uint8Array(m.size);\n    const CH = 4 * 1024 * 1024;\n    for (let pos = 0; pos < m.size; pos += CH) {\n      const end = Math.min(m.size, pos + CH) - 1;\n      const r = await fetch(`${url}/${pos}-${end}`, { signal: ac.signal });\n      if (r.status === 509) throw new MegaError(-17, 'MEGA bandwidth limit reached');\n      if (!r.ok) throw new Error(`Download HTTP ${r.status}`);\n      const ct = new Uint8Array(await r.arrayBuffer());\n      out.set(await ctrDecrypt(ctx, pos, ct), pos);\n      post({ type: 'fullProgress', req: m.req, loaded: end + 1, total: m.size });\n    }\n    post({ type: 'res', req: m.req, buf: out.buffer }, [out.buffer]);\n  } finally {\n    jobs.delete(m.req);\n  }\n}\n";
+// app.js — page UI. Uses core.js + idb.js symbols (inlined by the build) and
+// WORKER_SRC (the worker bundle as a string, injected by the build).
+
+// ================================================================ helpers
+const $ = (s, root = document) => root.querySelector(s);
+const make = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+const ICON = {
+  refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
+  link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  next: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.6c.7 0 1.3.3 1.8.8L12.3 6H18.5A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>',
+  play: '<svg viewBox="0 0 10 10" fill="currentColor"><path d="M1 0.5v9l8-4.5z"/></svg>',
+  home: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>',
+};
+
+function fmtBytes(n) {
+  if (!n) return '0 B';
+  if (n < 1024) return n + ' B';
+  const u = ['KB', 'MB', 'GB', 'TB', 'PB'];
+  let i = -1;
+  do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+  return (n >= 100 ? n.toFixed(0) : n >= 10 ? n.toFixed(1) : n.toFixed(2)) + ' ' + u[i];
+}
+const fmtNum = (n) => n.toLocaleString();
+function fmtDur(s) {
+  s = Math.round(s);
+  const h = (s / 3600) | 0, m = ((s % 3600) / 60) | 0, x = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0');
+}
+const fmtDate = (t) => (t ? new Date(t * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+function fmtAgo(ms) {
+  const s = (Date.now() - ms) / 1000;
+  if (s < 90) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  if (s < 86400 * 2) return Math.round(s / 3600) + ' h ago';
+  return Math.round(s / 86400) + ' days ago';
+}
+
+const EXT_COLORS = [
+  [/^(jpe?g|jpe|jfif|png|gif|webp|heic|heif|avif|bmp|tiff?|svg|dng|cr2|cr3|nef|arw|orf|rw2|raf)$/, [59, 130, 196]],
+  [/^(mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ts|mts|m2ts|ogv|vob|f4v)$/, [139, 92, 246]],
+  [/^(mp3|m4a|aac|flac|wav|ogg|oga|opus|wma|aiff?)$/, [217, 70, 122]],
+  [/^(zip|rar|7z|tar|gz|tgz|bz2|xz|zst|iso|dmg|cab|00\d)$/, [201, 138, 27]],
+  [/^pdf$/, [214, 69, 69]],
+  [/^(docx?|odt|rtf|txt|md|pages|epub)$/, [47, 125, 225]],
+  [/^(xlsx?|csv|ods|numbers)$/, [46, 157, 91]],
+  [/^(pptx?|odp|key)$/, [224, 112, 46]],
+  [/^(exe|msi|apk|ipa|app|deb|rpm|pkg|bin|img)$/, [91, 107, 122]],
+];
+function extBg(ext) {
+  let c = [107, 114, 128];
+  for (const [re, rgb] of EXT_COLORS) if (re.test(ext)) { c = rgb; break; }
+  return `linear-gradient(140deg, rgba(${c},.55), rgba(${c},.18))`;
+}
+
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* quota/private */ } }
+
+let toastTimer = 0;
+function toast(msg, ms = 4200) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+// ================================================================ constants & state
+const LS = { links: 'mg.links', view: 'mg.view', scroll: 'mg.scroll', folder: 'mg.folder' };
+const STALE_MS = 60 * 60 * 1000; // re-list a folder in the background when the cached copy is older
+const KIND = { folder: 0, photo: 1, video: 2, other: 3 };
+const TILE_TARGET = { s: 82, m: 118, l: 178 };
+const GAP = 2;
+const LIST_ROW = 58;
+const VIEW_DEFAULT = { flat: true, kind: 'media', sort: 'size-desc', q: '', mode: 'm' };
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1);
+const SW_CAPABLE = 'serviceWorker' in navigator && window.isSecureContext && location.protocol !== 'file:';
+const FALLBACK_MAX = IS_IOS ? 120 * 1024 * 1024 : 400 * 1024 * 1024; // in-memory fallback when no SW
+
+const S = {
+  links: [],
+  view: { ...VIEW_DEFAULT, ...lsGet(LS.view, {}), folder: null },
+  items: [],
+  stats: null,
+  dataVer: 0,
+  scrollMemo: lsGet(LS.scroll, {}),
+  ready: false,
+  swReady: false,
+};
+S.view.q = ''; // search is not restored across sessions (it surprises more than it helps)
+
+// ================================================================ worker bridge
+const W = (() => {
+  let w = null;
+  let seq = 0;
+  const pending = new Map();
+  const handlers = {};
+  const progress = new Map();
+
+  function onMsg(m) {
+    if (m.type === 'res') {
+      const p = pending.get(m.req);
+      if (!p) return;
+      pending.delete(m.req);
+      progress.delete(m.req);
+      if (m.error) p.reject(new Error(m.error)); else p.resolve(m);
+      return;
+    }
+    if (m.type === 'fullProgress') { const cb = progress.get(m.req); if (cb) cb(m); return; }
+    const h = handlers[m.type];
+    if (h) h(m);
+  }
+
+  function startInPage() {
+    // Same worker code on the main thread (e.g. if Workers from blob: URLs are blocked).
+    const shim = { onmessage: null, postMessage: (m) => setTimeout(() => onMsg(m), 0) };
+    new Function('self', WORKER_SRC)(shim);
+    w = { postMessage: (m) => setTimeout(() => shim.onmessage({ data: m }), 0), terminate() {} };
+    console.warn('[mega-gallery] Running worker code on the main thread');
+  }
+
+  async function start() {
+    try {
+      const url = URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' }));
+      const real = new Worker(url);
+      const ok = await new Promise((resolve) => {
+        const t = setTimeout(() => resolve(false), 2500);
+        real.onmessage = (e) => { if (e.data && e.data.type === 'pong') { clearTimeout(t); resolve(true); } };
+        real.onerror = () => { clearTimeout(t); resolve(false); };
+        real.postMessage({ type: 'ping' });
+      });
+      if (ok) {
+        real.onmessage = (e) => onMsg(e.data);
+        w = real;
+        return;
+      }
+      real.terminate();
+    } catch (err) { /* fall through */ }
+    startInPage();
+  }
+
+  return {
+    start,
+    on: (type, fn) => { handlers[type] = fn; },
+    post: (msg, transfer) => w.postMessage(msg, transfer || []),
+    call(type, data, onProgress) {
+      const req = 'r' + ++seq;
+      return new Promise((resolve, reject) => {
+        pending.set(req, { resolve, reject });
+        if (onProgress) progress.set(req, onProgress);
+        w.postMessage({ type, req, ...data });
+      });
+    },
+  };
+})();
+
+// ================================================================ links
+function makeLink(p, name) {
+  return {
+    id: p.id, key: p.key, sub: p.sub, url: p.url,
+    cid: p.id + (p.sub ? '.' + p.sub : ''),
+    name: name || null,
+    status: 'idle', error: null, prog: null, job: 0,
+    nodes: null, kids: null, root: null, at: 0, needsKey: !p.key,
+    files: 0, bytes: 0, photos: 0, videos: 0, thumbs: 0,
+  };
+}
+const linkByCid = (cid) => S.links.find((L) => L.cid === cid);
+const linkByJob = (job) => S.links.find((L) => L.job === job);
+function saveLinks() { lsSet(LS.links, S.links.map((L) => ({ url: L.url, name: L.name }))); }
+
+function loadLinks() {
+  for (const row of lsGet(LS.links, [])) {
+    try { S.links.push(makeLink(parseMegaLink(row.url), row.name)); } catch { /* drop unparsable */ }
+  }
+}
+
+function addLinksFromText(text) {
+  const tokens = String(text).split(/[\s,]+/).filter(Boolean);
+  // Re-join tokens that are part of one link when a key was pasted after a space
+  const added = [], errors = [], dupes = [];
+  for (const tok of tokens) {
+    if (!/mega|#F!|^F!/i.test(tok)) { errors.push(`Not a MEGA link: ${tok.slice(0, 40)}`); continue; }
+    let p;
+    try { p = parseMegaLink(tok); } catch (e) { errors.push(e.message); continue; }
+    const cid = p.id + (p.sub ? '.' + p.sub : '');
+    const old = linkByCid(cid);
+    if (old) {
+      if (p.key && p.key !== old.key) { old.key = p.key; old.url = p.url; old.needsKey = false; listLink(old); added.push(old); }
+      else dupes.push(old.name || p.id);
+      continue;
+    }
+    const L = makeLink(p);
+    S.links.push(L);
+    listLink(L);
+    added.push(L);
+  }
+  saveLinks();
+  renderLinks();
+  return { added, errors, dupes };
+}
+
+function removeLink(L) {
+  if (L.job) W.post({ type: 'cancel', job: L.job });
+  S.links = S.links.filter((x) => x !== L);
+  W.post({ type: 'forget', cid: L.cid });
+  saveLinks();
+  if (S.view.folder && S.view.folder.cid === L.cid) navigate(null, { replace: true });
+  dataChanged();
+}
+
+let jobSeq = 0;
+function listLink(L) {
+  if (L.job) W.post({ type: 'cancel', job: L.job });
+  L.job = ++jobSeq;
+  L.status = 'loading';
+  L.error = null;
+  L.prog = { phase: 'fetch' };
+  W.post({ type: 'list', job: L.job, cid: L.cid, link: { id: L.id, key: L.key, sub: L.sub } });
+  renderLinks();
+  updateProgress();
+}
+
+function refreshAll() {
+  for (const L of S.links) listLink(L);
+}
+
+W.on('progress', (m) => {
+  const L = linkByJob(m.job);
+  if (!L) return;
+  L.prog = m;
+  renderLinkRow(L);
+  updateProgress();
+});
+W.on('listed', (m) => {
+  const L = linkByJob(m.job);
+  if (!L) return;
+  L.job = 0;
+  L.status = 'ok';
+  L.prog = null;
+  indexLink(L, m.data);
+  saveLinks();
+  dataChanged();
+});
+W.on('listError', (m) => {
+  const L = linkByJob(m.job);
+  if (!L) return;
+  L.job = 0;
+  L.prog = null;
+  if (m.aborted) L.status = L.nodes ? 'ok' : 'cancelled';
+  else { L.status = 'error'; L.error = m.error; if (!S.sheetOpen) toast(`${L.name || L.id}: ${m.error}`); }
+  renderLinks();
+  updateProgress();
+  renderHeader();
+});
+
+/** Build parent->children index and folder aggregates for one link's listing. */
+function indexLink(L, data) {
+  const nodes = new Map();
+  const kids = new Map();
+  let photos = 0, videos = 0, thumbs = 0;
+  for (const r of data.nodes) {
+    r.L = L;
+    if (r.n === null) r.n = (r.t ? 'Folder ' : 'File ') + r.h; // no key: names stay encrypted
+    r.K = KIND[kindOf(r)];
+    r.x = extOf(r.n);
+    if (r.t) { r.fs = 0; r.fc = 0; }
+    if (r.k && r.fa) {
+      const t = parseFa(r.fa).thumb;
+      if (t) { r.tc = t.c; r.tf = t.h; thumbs++; }
+    }
+    if (r.K === 1) photos++;
+    else if (r.K === 2) videos++;
+    nodes.set(r.h, r);
+    if (r.p) {
+      let a = kids.get(r.p);
+      if (!a) kids.set(r.p, (a = []));
+      a.push(r);
+    }
+  }
+  // Recursive folder sizes / file counts (walk each file up its parent chain).
+  for (const r of data.nodes) {
+    if (r.t) continue;
+    let p = r.p;
+    let guard = 0;
+    while (p && guard++ < 256) {
+      const f = nodes.get(p);
+      if (!f) break;
+      f.fs += r.s;
+      f.fc++;
+      p = f.p;
+    }
+  }
+  const root = nodes.get(data.root);
+  L.nodes = nodes;
+  L.kids = kids;
+  L.root = data.root;
+  L.at = data.at;
+  L.needsKey = data.needsKey;
+  if (root && !data.needsKey) L.name = root.n;
+  if (root && data.needsKey) root.n = L.name || `Folder ${L.id}`;
+  L.files = root ? root.fc : 0;
+  L.bytes = root ? root.fs : 0;
+  L.photos = photos;
+  L.videos = videos;
+  L.thumbs = thumbs;
+  if (L.status !== 'loading') L.status = data.needsKey ? 'needs-key' : 'ok';
+}
+
+// ================================================================ view computation
+const coll = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const sizeOf = (r) => (r.t ? r.fs : r.s);
+const CMP = {
+  'size-desc': (a, b) => sizeOf(b) - sizeOf(a) || coll.compare(a.n, b.n),
+  'size-asc': (a, b) => sizeOf(a) - sizeOf(b) || coll.compare(a.n, b.n),
+  'name-asc': (a, b) => coll.compare(a.n, b.n),
+  'name-desc': (a, b) => coll.compare(b.n, a.n),
+  'date-desc': (a, b) => b.mt - a.mt || coll.compare(a.n, b.n),
+  'date-asc': (a, b) => a.mt - b.mt || coll.compare(a.n, b.n),
+  type: (a, b) => a.K - b.K || (a.x < b.x ? -1 : a.x > b.x ? 1 : 0) || coll.compare(a.n, b.n),
+};
+
+const C = { baseKey: '', base: [], sortKey: '', sorted: [] };
+const folderKey = (f = S.view.folder) => (f ? f.cid + '/' + f.h : '');
+const viewKey = () => { const v = S.view; return `${folderKey()}|${v.flat ? 1 : 0}|${v.kind}|${v.sort}|${v.q}|${v.mode}`; };
+
+function collect(L, h, out, seen, withFolders) {
+  const stack = [h];
+  while (stack.length) {
+    const ch = L.kids.get(stack.pop());
+    if (!ch) continue;
+    for (const r of ch) {
+      if (r.t) { stack.push(r.h); if (!withFolders) continue; }
+      if (seen) { if (seen.has(r.h)) continue; seen.add(r.h); }
+      out.push(r);
+    }
+  }
+}
+
+function computeBase(flat, withFolders) {
+  const f = S.view.folder;
+  const links = S.links.filter((L) => L.nodes);
+  if (!f) {
+    if (!flat) return links.map((L) => L.nodes.get(L.root)).filter(Boolean);
+    const out = [];
+    const seen = links.length > 1 ? new Set() : null; // two links may share files
+    for (const L of links) collect(L, L.root, out, seen, withFolders);
+    return out;
+  }
+  const L = linkByCid(f.cid);
+  if (!L || !L.nodes || !L.nodes.has(f.h)) return [];
+  if (!flat) return (L.kids.get(f.h) || []).slice();
+  const out = [];
+  collect(L, f.h, out, null, withFolders);
+  return out;
+}
+
+function recompute() {
+  const v = S.view;
+  const q = v.q.trim().toLowerCase();
+  const flat = v.flat || !!q;
+  const withFolders = !!q || v.kind === 'folder';
+  const bk = `${S.dataVer}|${folderKey()}|${flat}|${withFolders}`;
+  if (bk !== C.baseKey) { C.base = computeBase(flat, withFolders); C.baseKey = bk; C.sortKey = ''; }
+  const sk = bk + '|' + v.sort;
+  if (sk !== C.sortKey) {
+    const cmp = CMP[v.sort] || CMP['size-desc'];
+    C.sorted = C.base.slice().sort(flat ? cmp : (a, b) => b.t - a.t || cmp(a, b));
+    C.sortKey = sk;
+  }
+  const items = [];
+  let bytes = 0;
+  const n = [0, 0, 0, 0];
+  for (const r of C.sorted) {
+    const k = r.K;
+    switch (v.kind) {
+      case 'media': if (k !== 1 && k !== 2 && (flat || k !== 0)) continue; break;
+      case 'photo': if (k !== 1 && (flat || k !== 0)) continue; break;
+      case 'video': if (k !== 2 && (flat || k !== 0)) continue; break;
+      case 'other': if (k !== 3 && (flat || k !== 0)) continue; break;
+      case 'folder': if (k !== 0) continue; break;
+    }
+    if (q && !(r.lc || (r.lc = r.n.toLowerCase())).includes(q)) continue;
+    items.push(r);
+    n[k]++;
+    // Flattened views can mix a folder with its own files (search, Folders chip):
+    // count file bytes only there so the total never double-counts.
+    if (!flat || k !== 0) bytes += sizeOf(r);
+  }
+  if (flat && v.kind === 'folder' && !q) {
+    // Nested folders overlap, so their sizes can't be summed: report the scope's real total.
+    const f = S.view.folder;
+    const L = f && linkByCid(f.cid);
+    bytes = f ? ((L && L.nodes && L.nodes.get(f.h)) || { fs: 0 }).fs : S.links.reduce((a, x) => a + (x.nodes ? x.bytes : 0), 0);
+  }
+  S.items = items;
+  S.stats = { count: items.length, bytes, folders: n[0], photos: n[1], videos: n[2], other: n[3], flat };
+}
+
+// ================================================================ virtual grid
+const sizer = $('#sizer');
+const G = { cols: 1, tile: 0, rowH: 1, w: 0, top: 0, list: false, live: new Map(), pool: [] };
+
+function layout() {
+  const mode = S.view.mode;
+  G.list = mode === 'list';
+  const w = sizer.clientWidth || window.innerWidth;
+  G.w = w;
+  if (G.list) { G.cols = 1; G.tile = w; G.rowH = LIST_ROW; }
+  else {
+    const t = TILE_TARGET[mode] || TILE_TARGET.m;
+    G.cols = Math.max(2, Math.round((w + GAP) / (t + GAP)));
+    G.tile = (w - GAP * (G.cols - 1)) / G.cols;
+    G.rowH = G.tile + GAP;
+  }
+  const rows = Math.ceil(S.items.length / G.cols);
+  sizer.style.height = Math.max(0, rows * G.rowH - (G.list ? 0 : GAP)) + 'px';
+  sizer.classList.toggle('list', G.list);
+  sizer.classList.toggle('show-size', S.view.sort.startsWith('size') && mode !== 's');
+  $('#listHead').hidden = !G.list;
+  G.top = sizer.getBoundingClientRect().top + window.scrollY;
+}
+
+function makeTile() {
+  const el = make('div', 'tile');
+  el.innerHTML = '<div class="ph"></div><img alt="" decoding="async" draggable="false"><span class="badge"></span><span class="size"></span><div class="cap"><div><div class="nm"></div><div class="mt"></div><div class="sub"></div></div><div class="dt"></div><div class="sz"></div></div>';
+  const t = {
+    el, ph: el.children[0], img: el.children[1], badge: el.children[2], size: el.children[3],
+    nm: $('.nm', el), mt: $('.mt', el), sub: $('.sub', el), dt: $('.dt', el), sz: $('.sz', el),
+    h: null, ver: -1, i: -1,
+  };
+  t.img.onload = () => el.classList.add('loaded');
+  t.img.onerror = () => el.classList.remove('loaded');
+  sizer.appendChild(el);
+  return t;
+}
+
+function parentName(r) {
+  const p = r.L.nodes.get(r.p);
+  return p ? p.n : '';
+}
+
+function fillTile(t, r, i) {
+  const col = i % G.cols, row = (i / G.cols) | 0;
+  const x = G.list ? 0 : col * (G.tile + GAP);
+  const y = row * G.rowH;
+  const s = t.el.style;
+  s.transform = `translate3d(${x}px,${y}px,0)`;
+  s.width = (G.list ? G.w : G.tile) + 'px';
+  s.height = (G.list ? G.rowH : G.tile) + 'px';
+  if (t.hidden) { s.display = ''; t.hidden = false; }
+  t.i = i;
+  t.el.dataset.i = i;
+  const ver = `${S.dataVer}|${S.view.mode}|${S.stats.flat}`;
+  if (t.h === r.h && t.ver === ver) return; // same content, only moved
+  t.h = r.h; t.ver = ver;
+  t.el.className = 'tile k' + r.K;
+  if (r.K === 0) {
+    t.ph.style.background = '';
+    t.ph.innerHTML = ICON.folder;
+    t.mt.textContent = `${fmtNum(r.fc)} file${r.fc === 1 ? '' : 's'} · ${fmtBytes(r.fs)}`;
+  } else {
+    t.ph.style.background = extBg(r.x);
+    t.ph.textContent = (r.x || '?').slice(0, 5).toUpperCase();
+    t.mt.textContent = fmtBytes(r.s);
+  }
+  t.nm.textContent = r.n;
+  t.size.textContent = fmtBytes(sizeOf(r));
+  t.badge.innerHTML = r.K === 2 ? ICON.play + (r.d ? fmtDur(r.d) : '') : '';
+  if (G.list) {
+    t.sub.textContent = S.stats.flat ? parentName(r) : r.K === 0 ? `${fmtNum(r.fc)} files` : '';
+    t.dt.textContent = fmtDate(r.mt);
+    t.sz.textContent = fmtBytes(sizeOf(r));
+  }
+  const u = thumbGet(r.h);
+  if (u) { t.img.src = u; if (t.img.complete && t.img.naturalWidth) t.el.classList.add('loaded'); }
+  else t.img.removeAttribute('src');
+}
+
+function render(reset) {
+  const n = S.items.length;
+  if (reset) {
+    for (const t of G.live.values()) { t.el.style.display = 'none'; t.hidden = true; t.h = null; G.pool.push(t); }
+    G.live.clear();
+  }
+  if (!n) {
+    for (const t of G.live.values()) { t.el.style.display = 'none'; t.hidden = true; G.pool.push(t); }
+    G.live.clear();
+    return;
+  }
+  const y = window.scrollY - G.top;
+  const vh = window.innerHeight;
+  const over = Math.max(240, vh * 0.5);
+  const r0 = Math.max(0, Math.floor((y - over) / G.rowH));
+  const r1 = Math.max(r0, Math.floor((y + vh + over) / G.rowH));
+  const i0 = r0 * G.cols;
+  const i1 = Math.min(n - 1, (r1 + 1) * G.cols - 1);
+  for (const [i, t] of G.live) {
+    if (i < i0 || i > i1) { G.live.delete(i); t.el.style.display = 'none'; t.hidden = true; G.pool.push(t); }
+  }
+  for (let i = i0; i <= i1; i++) {
+    if (G.live.has(i)) continue;
+    // Prefer a pooled tile that already shows this node (no image reload).
+    let t = null;
+    const r = S.items[i];
+    for (let k = G.pool.length - 1; k >= 0 && k > G.pool.length - 40; k--) {
+      if (G.pool[k].h === r.h) { t = G.pool.splice(k, 1)[0]; break; }
+    }
+    if (!t) t = G.pool.pop() || makeTile();
+    fillTile(t, r, i);
+    G.live.set(i, t);
+  }
+}
+
+// ---------------------------------------------------------------- scrolling
+let rafPending = false, lastY = 0, lastT = 0, thumbTimer = 0, lastWant = 0, scrollSaveTimer = 0;
+function onScroll() {
+  const now = performance.now();
+  const y = window.scrollY;
+  const vel = Math.abs(y - lastY) / Math.max(1, now - lastT); // px per ms
+  lastY = y; lastT = now;
+  if (!rafPending) { rafPending = true; requestAnimationFrame(() => { rafPending = false; render(false); }); }
+  clearTimeout(thumbTimer);
+  if (vel < 2 && now - lastWant > 220) requestThumbs(); // slow scroll: keep filling
+  thumbTimer = setTimeout(requestThumbs, 150);          // fast fling: wait until it settles
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(saveScroll, 300);
+}
+
+function saveScroll() {
+  if (!S.ready) return;
+  const memo = S.scrollMemo;
+  const k = viewKey();
+  delete memo[k];
+  memo[k] = Math.round(window.scrollY);
+  const keys = Object.keys(memo);
+  for (let i = 0; i < keys.length - 40; i++) delete memo[keys[i]];
+  lsSet(LS.scroll, memo);
+}
+
+function restoreScroll() {
+  const y = S.scrollMemo[viewKey()] || 0;
+  window.scrollTo(0, y);
+  lastY = window.scrollY;
+}
+
+// ================================================================ thumbnails
+// Object URLs for decoded thumbnails, LRU-bounded so a long scroll session stays light.
+const TH = { map: new Map(), none: new Set(), err: new Map(), MAX: IS_IOS ? 900 : 2500, net: 0, cached: 0 };
+
+function thumbGet(h) {
+  const u = TH.map.get(h);
+  if (u) { TH.map.delete(h); TH.map.set(h, u); }
+  return u;
+}
+
+function thumbEvict() {
+  if (TH.map.size <= TH.MAX) return;
+  const keep = new Set();
+  for (const t of G.live.values()) keep.add(t.h);
+  if (LB.r) keep.add(LB.r.h);
+  for (const [h, u] of TH.map) {
+    if (TH.map.size <= TH.MAX * 0.85) break;
+    if (keep.has(h)) continue;
+    URL.revokeObjectURL(u);
+    TH.map.delete(h);
+  }
+}
+
+W.on('thumb', (m) => {
+  if (m.buf) {
+    if (TH.map.has(m.id)) return;
+    const u = URL.createObjectURL(new Blob([m.buf], { type: 'image/jpeg' }));
+    TH.map.set(m.id, u);
+    if (m.cached) TH.cached++; else TH.net++;
+    for (const t of G.live.values()) {
+      if (t.h === m.id) { t.el.classList.remove('loaded'); t.img.src = u; }
+    }
+    if (LB.r && LB.r.h === m.id && !$('#lbImg').getAttribute('src')) setLbImage(u, true);
+    thumbEvict();
+    scheduleStatus();
+  } else if (m.none) {
+    TH.none.add(m.id);
+  } else if (m.error) {
+    TH.err.set(m.id, Date.now());
+  }
+});
+
+function requestThumbs() {
+  lastWant = performance.now();
+  const n = S.items.length;
+  if (!n || OV.current === 'lb' || OV.current === 'player') return;
+  const y = window.scrollY - G.top;
+  const vh = window.innerHeight;
+  const v0 = Math.max(0, Math.floor(y / G.rowH) * G.cols);
+  const v1 = Math.min(n - 1, (Math.floor((y + vh) / G.rowH) + 1) * G.cols - 1);
+  const screen = Math.max(G.cols, v1 - v0 + 1);
+  const want = [];
+  const now = Date.now();
+  const push = (i) => {
+    const r = S.items[i];
+    if (!r || !r.tf || TH.map.has(r.h) || TH.none.has(r.h)) return;
+    const e = TH.err.get(r.h);
+    if (e && now - e < 60000) return;
+    want.push({ id: r.h, folder: r.L.id, c: r.tc, fah: r.tf, k: r.k });
+  };
+  for (let i = v0; i <= v1; i++) push(i);                                           // visible
+  for (let i = v1 + 1; i <= Math.min(n - 1, v1 + screen * 3); i++) push(i);        // 3 screens ahead
+  for (let i = v0 - 1; i >= Math.max(0, v0 - screen); i--) push(i);                 // 1 screen behind
+  W.post({ type: 'thumbs', want: want.slice(0, 480) });
+}
+
+// ================================================================ header / chrome
+function crumbChain() {
+  const f = S.view.folder;
+  if (!f) return [];
+  const L = linkByCid(f.cid);
+  if (!L || !L.nodes) return [];
+  const chain = [];
+  let r = L.nodes.get(f.h);
+  let guard = 0;
+  while (r && guard++ < 200) { chain.unshift(r); r = r.p ? L.nodes.get(r.p) : null; }
+  return chain;
+}
+
+function renderHeader() {
+  const v = S.view;
+  // crumbs
+  const cr = $('#crumbs');
+  cr.innerHTML = '';
+  const home = make('button', 'home');
+  home.innerHTML = ICON.home + '<span>' + (S.links.length > 1 ? 'All folders' : (S.links[0] && S.links[0].name) || 'Mega Gallery') + '</span>';
+  home.onclick = () => navigate(null);
+  cr.appendChild(home);
+  const chain = crumbChain();
+  for (const r of chain) {
+    if (S.links.length === 1 && !r.p) continue; // single link: its root is "home"
+    const sep = make('span', 'sep');
+    sep.textContent = '›';
+    cr.appendChild(sep);
+    const b = make('button');
+    b.textContent = r.n;
+    b.onclick = () => navigate({ cid: r.L.cid, h: r.h });
+    cr.appendChild(b);
+  }
+  cr.scrollLeft = cr.scrollWidth;
+  // controls
+  $('#q').value !== v.q && ($('#q').value = v.q);
+  $('#sort').value = v.sort;
+  $('#mode').value = v.mode;
+  for (const b of $('#flat').children) b.setAttribute('aria-pressed', String((b.dataset.flat === '1') === !!v.flat));
+  for (const b of $('#chips').children) b.setAttribute('aria-pressed', String(b.dataset.kind === v.kind));
+  for (const b of $('#listHead').children) b.classList.toggle('on', v.sort.startsWith(b.dataset.col));
+  $('#linkCount').textContent = S.links.length ? `${S.links.length} link${S.links.length === 1 ? '' : 's'}` : 'Add links';
+  renderStats();
+  renderEmpty();
+}
+
+function renderStats() {
+  const st = S.stats;
+  if (!st) { $('#stats').textContent = ''; return; }
+  const parts = [];
+  if (st.photos) parts.push(`${fmtNum(st.photos)} photo${st.photos === 1 ? '' : 's'}`);
+  if (st.videos) parts.push(`${fmtNum(st.videos)} video${st.videos === 1 ? '' : 's'}`);
+  if (st.other) parts.push(`${fmtNum(st.other)} other`);
+  if (st.folders) parts.push(`${fmtNum(st.folders)} folder${st.folders === 1 ? '' : 's'}`);
+  $('#stats').innerHTML = `<b>${fmtNum(st.count)}</b> items · <b>${fmtBytes(st.bytes)}</b>` + (parts.length > 1 ? ` <span class="brk">· ${parts.join(', ')}</span>` : '');
+  $('#stats').title = `${st.bytes.toLocaleString()} bytes total`;
+}
+
+let statusTimer = 0;
+function scheduleStatus() {
+  if (statusTimer) return;
+  statusTimer = setTimeout(() => { statusTimer = 0; renderStatus(); }, 400);
+}
+function renderStatus() {
+  const loading = S.links.filter((L) => L.status === 'loading');
+  let s = '';
+  if (loading.length) {
+    const L = loading[0];
+    const p = L.prog || {};
+    s = p.phase === 'decrypt' ? `Decrypting ${L.name || L.id}… ${Math.round((p.done / p.total) * 100)}%` : `Listing ${L.name || L.id}…`;
+    if (loading.length > 1) s += ` (+${loading.length - 1})`;
+  } else if (TH.net || TH.cached) {
+    s = `thumbs ${fmtNum(TH.cached)} cached · ${fmtNum(TH.net)} fetched`;
+  }
+  $('#status').textContent = s;
+}
+
+function updateProgress() {
+  const loading = S.links.filter((L) => L.status === 'loading');
+  const bar = $('#progress');
+  const btn = $('#btnRefresh');
+  btn.classList.toggle('spin', loading.length > 0);
+  if (!loading.length) { bar.hidden = true; renderStatus(); return; }
+  bar.hidden = false;
+  const fr = loading.map((L) => (L.prog && L.prog.phase === 'decrypt' ? L.prog.done / L.prog.total : 0));
+  const known = fr.some((x) => x > 0);
+  bar.classList.toggle('indet', !known);
+  bar.firstElementChild.style.width = known ? (100 * fr.reduce((a, b) => a + b, 0) / fr.length) + '%' : '';
+  renderStatus();
+}
+
+function renderEmpty() {
+  const e = $('#empty');
+  let html = '';
+  if (!S.links.length) {
+    html = '<h3>No folders yet</h3><p>Add one or more public MEGA folder links to browse them here as one gallery.</p><button class="primary" data-act="links">Add folder links</button>';
+  } else if (!S.items.length) {
+    const loading = S.links.some((L) => L.status === 'loading');
+    const anyData = S.links.some((L) => L.nodes);
+    if (loading && !anyData) html = '<h3>Listing folders…</h3><p>Decrypting names and keys in your browser.</p>';
+    else if (S.links.every((L) => L.status === 'error')) html = '<h3>Couldn\'t load your links</h3><p>Open Links to see what went wrong.</p><button class="primary" data-act="links">Open links</button>';
+    else if (S.view.q) html = `<h3>No matches</h3><p>Nothing named “${esc(S.view.q)}” here.</p>`;
+    else html = '<h3>Nothing to show</h3><p>Try another filter, or switch between “Folders” and “All files”.</p>';
+  }
+  e.innerHTML = html;
+  e.hidden = !html;
+}
+
+// ================================================================ view changes & navigation
+function persistView() {
+  const { folder, q, ...rest } = S.view;
+  lsSet(LS.view, rest);
+  lsSet(LS.folder, folder);
+}
+
+function onViewChanged({ restore = true } = {}) {
+  recompute();
+  layout();
+  render(true);
+  renderHeader();
+  if (restore) restoreScroll();
+  render(false);
+  requestThumbs();
+  persistView();
+}
+
+/** Listings changed: keep the current scroll position. */
+function dataChanged() {
+  S.dataVer++;
+  if (S.view.folder) {
+    const L = linkByCid(S.view.folder.cid);
+    if (!L || (L.nodes && !L.nodes.has(S.view.folder.h))) S.view.folder = null;
+  }
+  const y = window.scrollY;
+  recompute();
+  layout();
+  render(true);
+  renderHeader();
+  window.scrollTo(0, y);
+  render(false);
+  requestThumbs();
+  renderLinks();
+  updateProgress();
+}
+
+function hashFor(f) { return f ? `#f=${f.cid}/${f.h}` : location.pathname + location.search; }
+function parseHash() {
+  const m = location.hash.match(/^#f=([\w.-]+)\/([\w-]{8})$/);
+  return m ? { cid: m[1], h: m[2] } : null;
+}
+
+function navigate(folder, { replace = false } = {}) {
+  if (folderKey(folder) === folderKey()) { window.scrollTo(0, 0); return; }
+  saveScroll();
+  S.view.folder = folder;
+  if (S.view.q) { S.view.q = ''; }
+  if (folder && S.view.kind === 'folder') S.view.kind = S.view.flat ? 'media' : 'all';
+  const st = { f: folder };
+  if (replace) history.replaceState(st, '', hashFor(folder)); else history.pushState(st, '', hashFor(folder));
+  onViewChanged();
+}
+
+window.addEventListener('popstate', () => {
+  if (OV.current) closeOverlayNow();
+  const f = parseHash();
+  if (folderKey(f) !== folderKey()) {
+    saveScroll();
+    S.view.folder = f;
+    onViewChanged();
+  }
+});
+
+// ================================================================ overlays (sheet, lightbox, player, info)
+const OV = { current: null };
+function openOverlay(name) {
+  if (OV.current) closeOverlayNow();
+  OV.current = name;
+  $('#' + overlayId(name)).hidden = false;
+  document.documentElement.style.overflow = 'hidden';
+  history.pushState({ f: S.view.folder, ov: name }, '', location.href);
+}
+function overlayId(name) { return { links: 'sheet', lb: 'lb', player: 'player', info: 'info' }[name]; }
+function closeOverlay() {
+  if (!OV.current) return;
+  if (history.state && history.state.ov) history.back(); // popstate closes it
+  else closeOverlayNow();
+}
+function closeOverlayNow() {
+  const name = OV.current;
+  if (!name) return;
+  OV.current = null;
+  $('#' + overlayId(name)).hidden = true;
+  document.documentElement.style.overflow = '';
+  if (name === 'player') stopVideo();
+  if (name === 'lb') closeLightbox();
+  if (name === 'links') S.sheetOpen = false;
+  requestThumbs();
+}
+
+document.addEventListener('click', (e) => {
+  const c = e.target.closest('[data-close]');
+  if (c) { e.preventDefault(); closeOverlay(); return; }
+  const a = e.target.closest('[data-act="links"]');
+  if (a) openLinks();
+});
+for (const id of ['sheet', 'info']) {
+  $('#' + id).addEventListener('click', (e) => { if (e.target.id === id) closeOverlay(); });
+}
+
+// ---------------------------------------------------------------- links sheet
+function openLinks() {
+  openOverlay('links');
+  S.sheetOpen = true;
+  renderLinks();
+  W.call('cacheStats', {}).then((m) => { $('#cacheInfo').textContent = `${fmtNum(m.thumbs)} thumbnails cached in this browser.`; }).catch(() => {});
+  if (!S.links.length) setTimeout(() => $('#linkInput').focus(), 50);
+}
+
+function linkStatusText(L) {
+  const p = L.prog;
+  if (L.status === 'loading') {
+    if (p && p.phase === 'decrypt') return `Decrypting ${fmtNum(p.done)} / ${fmtNum(p.total)} nodes…`;
+    return 'Listing folder tree…';
+  }
+  if (L.status === 'error') return L.error || 'Failed';
+  if (L.status === 'cancelled') return 'Cancelled';
+  if (!L.nodes) return 'Not loaded yet';
+  const bits = [`${fmtNum(L.files)} files`, fmtBytes(L.bytes)];
+  if (L.photos) bits.push(`${fmtNum(L.photos)} photos`);
+  if (L.videos) bits.push(`${fmtNum(L.videos)} videos`);
+  bits.push(`updated ${fmtAgo(L.at)}`);
+  return bits.join(' · ');
+}
+
+function renderLinkRow(L) {
+  const li = document.querySelector(`#linkList li[data-cid="${CSS.escape(L.cid)}"]`);
+  if (!li) return renderLinks();
+  const st = $('.lk-stat', li);
+  st.textContent = linkStatusText(L);
+  st.classList.toggle('err', L.status === 'error');
+  const bar = $('.lk-bar', li);
+  bar.hidden = L.status !== 'loading';
+  if (L.prog && L.prog.phase === 'decrypt') bar.firstElementChild.style.width = (100 * L.prog.done / L.prog.total) + '%';
+  $('[data-a="refresh"]', li).textContent = L.status === 'loading' ? 'Cancel' : 'Refresh';
+}
+
+function renderLinks() {
+  $('#linkCount').textContent = S.links.length ? `${S.links.length} link${S.links.length === 1 ? '' : 's'}` : 'Add links';
+  if (!S.sheetOpen) return;
+  const ul = $('#linkList');
+  ul.innerHTML = '';
+  for (const L of S.links) {
+    const li = make('li');
+    li.dataset.cid = L.cid;
+    li.innerHTML = `
+      <div class="lk-row">
+        <div class="lk-main">
+          <div class="lk-name">${esc(L.name || 'Folder ' + L.id)}</div>
+          <div class="lk-url">${esc(L.url)}</div>
+          <div class="lk-stat"></div>
+          <div class="lk-bar" hidden><div></div></div>
+        </div>
+        <div class="lk-btns"><button data-a="refresh">Refresh</button><button data-a="remove">Remove</button></div>
+      </div>
+      ${L.needsKey ? '<form class="lk-key"><input placeholder="Decryption key (22 characters)" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="primary">Use key</button></form>' : ''}`;
+    $('[data-a="refresh"]', li).onclick = () => {
+      if (L.status === 'loading') W.post({ type: 'cancel', job: L.job });
+      else listLink(L);
+    };
+    $('[data-a="remove"]', li).onclick = () => removeLink(L);
+    const kf = $('.lk-key', li);
+    if (kf) {
+      kf.onsubmit = (e) => {
+        e.preventDefault();
+        const key = $('input', kf).value.trim().replace(/^#|^!/, '');
+        try {
+          const p = parseMegaLink(`https://mega.nz/folder/${L.id}#${key}${L.sub ? '/folder/' + L.sub : ''}`);
+          L.key = p.key; L.url = p.url; L.needsKey = false;
+          saveLinks();
+          listLink(L);
+        } catch (err) { toast(err.message); }
+      };
+    }
+    ul.appendChild(li);
+    renderLinkRow(L);
+  }
+}
+
+$('#addForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = $('#linkInput');
+  const msg = $('#addMsg');
+  const { added, errors, dupes } = addLinksFromText(input.value);
+  const lines = [];
+  if (added.length) lines.push(`Added ${added.length} link${added.length === 1 ? '' : 's'}.`);
+  if (dupes.length) lines.push(`Already added: ${dupes.join(', ')}.`);
+  if (errors.length) lines.push(errors.join(' '));
+  msg.textContent = lines.join(' ');
+  msg.className = 'form-msg ' + (errors.length && !added.length ? 'err' : 'ok');
+  if (added.length && !errors.length) input.value = '';
+  if (added.length) { renderHeader(); renderEmpty(); }
+});
+$('#linkInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#addForm').requestSubmit(); }
+});
+$('#btnRefreshAll').onclick = () => refreshAll();
+$('#btnClearThumbs').onclick = async () => {
+  await W.call('clearThumbs', {});
+  $('#cacheInfo').textContent = 'Thumbnail cache cleared.';
+};
+
+// ---------------------------------------------------------------- item activation
+sizer.addEventListener('click', (e) => {
+  const tile = e.target.closest('.tile');
+  if (!tile) return;
+  const i = +tile.dataset.i;
+  const r = S.items[i];
+  if (!r) return;
+  if (r.K === 0) navigate({ cid: r.L.cid, h: r.h });
+  else if (r.K === 1) openLightbox(i);
+  else if (r.K === 2) openVideo(i);
+  else openInfo(r);
+});
+
+function megaUrl(r) {
+  const L = r.L;
+  return `https://mega.nz/folder/${L.id}${L.key ? '#' + L.key : ''}/${r.t ? 'folder' : 'file'}/${r.h}`;
+}
+
+function pathOf(r) {
+  const parts = [];
+  let p = r.p ? r.L.nodes.get(r.p) : null;
+  let guard = 0;
+  while (p && guard++ < 200) { parts.unshift(p.n); p = p.p ? r.L.nodes.get(p.p) : null; }
+  return parts.join(' / ');
+}
+
+function openInfo(r) {
+  $('#infoName').textContent = r.n;
+  const rows = [
+    ['Size', `${fmtBytes(r.s)} (${r.s.toLocaleString()} bytes)`],
+    ['Modified', fmtDate(r.mt)],
+    ['Uploaded', fmtDate(r.ts)],
+    ['Folder', pathOf(r)],
+  ];
+  if (r.d) rows.push(['Duration', fmtDur(r.d)]);
+  $('#infoBody').innerHTML = rows.filter((x) => x[1]).map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  $('#infoMega').href = megaUrl(r);
+  openOverlay('info');
+}
+
+// ---------------------------------------------------------------- streaming via the service worker
+function streamInfoOf(r) { return { id: r.h, folder: r.L.id, key: r.k, size: r.s, name: r.n, mime: mimeOf(r.n) }; }
+function streamUrl(r) { return `__mg/stream/${r.h}/${encodeURIComponent(r.n.replace(/[/\\?#]/g, '_'))}`; }
+function canStream() { return S.swReady && !!navigator.serviceWorker.controller; }
+function registerStream(r) {
+  const info = streamInfoOf(r);
+  try { navigator.serviceWorker.controller.postMessage({ type: 'stream', info }); } catch { /* idb copy suffices */ }
+  return idbPut('streams', info);
+}
+
+async function setupServiceWorker() {
+  if (!SW_CAPABLE) return;
+  try {
+    await navigator.serviceWorker.register('sw.js', { scope: './' });
+    if (!navigator.serviceWorker.controller) {
+      await new Promise((res) => {
+        navigator.serviceWorker.addEventListener('controllerchange', res, { once: true });
+        setTimeout(res, 5000);
+      });
+    }
+    S.swReady = !!navigator.serviceWorker.controller;
+  } catch (err) {
+    console.warn('[mega-gallery] service worker unavailable:', err);
+  }
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    const m = e.data || {};
+    if (m.type !== 'stream-error') return;
+    const msg = m.code === -17 ? `MEGA transfer quota reached${m.message.includes('resets') ? ' — ' + m.message.split('(').pop().replace(')', '') : ''}. Try again later.` : m.message;
+    if (OV.current === 'player') setMsg('#plMsg', esc(msg));
+    else if (OV.current === 'lb') setMsg('#lbMsg', esc(msg));
+    else toast(msg);
+  });
+}
+
+/** No service worker (file://, private mode): download + decrypt in the worker into memory. */
+async function fallbackObjectUrl(r, msgSel) {
+  if (r.s > FALLBACK_MAX) throw new Error(`Streaming needs the page served over https or localhost (service workers don't run on file://). This file is too big (${fmtBytes(r.s)}) to load into memory instead.`);
+  const m = await W.call('full', { id: r.h, folder: r.L.id, k: r.k, size: r.s }, (p) => {
+    setMsg(msgSel, `Loading into memory… ${Math.round((100 * p.loaded) / p.total)}%`);
+  });
+  setMsg(msgSel, '');
+  return URL.createObjectURL(new Blob([m.buf], { type: mimeOf(r.n) }));
+}
+
+function setMsg(sel, html) { $(sel).innerHTML = html; }
+
+// ---------------------------------------------------------------- lightbox
+const LB = { i: -1, r: null, previews: new Map(), loading: new Map(), orig: null, origUrl: null, swipe: null };
+const lbImg = $('#lbImg');
+
+function photoIndex(from, dir) {
+  for (let i = from + dir; i >= 0 && i < S.items.length; i += dir) if (S.items[i].K === 1) return i;
+  return -1;
+}
+
+function openLightbox(i) {
+  openOverlay('lb');
+  $('#lb').classList.remove('chrome-off');
+  showPhoto(i);
+}
+
+function setLbImage(src, blur) {
+  lbImg.classList.toggle('blur', !!blur);
+  if (src) lbImg.src = src; else lbImg.removeAttribute('src');
+}
+
+function loadPreview(r) {
+  if (LB.previews.has(r.h)) return Promise.resolve(LB.previews.get(r.h));
+  if (LB.loading.has(r.h)) return LB.loading.get(r.h);
+  const pf = r.k && parseFa(r.fa).preview;
+  if (!pf) return Promise.reject(new Error('no preview'));
+  const p = W.call('preview', { id: r.h, folder: r.L.id, c: pf.c, fah: pf.h, k: r.k }).then((m) => {
+    const u = URL.createObjectURL(new Blob([m.buf], { type: 'image/jpeg' }));
+    LB.previews.set(r.h, u);
+    while (LB.previews.size > 10) {
+      const [h, old] = LB.previews.entries().next().value;
+      if (LB.r && h === LB.r.h) break;
+      URL.revokeObjectURL(old);
+      LB.previews.delete(h);
+    }
+    return u;
+  });
+  LB.loading.set(r.h, p);
+  p.then(() => LB.loading.delete(r.h), () => LB.loading.delete(r.h));
+  return p;
+}
+
+function showPhoto(i) {
+  const r = S.items[i];
+  if (!r) return;
+  LB.i = i;
+  LB.r = r;
+  dropOriginal();
+  $('#lbName').textContent = r.n;
+  $('#lbMeta').textContent = [fmtBytes(r.s), fmtDate(r.mt), pathOf(r)].filter(Boolean).join(' · ');
+  $('#lbPrev').disabled = photoIndex(i, -1) < 0;
+  $('#lbNext').disabled = photoIndex(i, 1) < 0;
+  $('#lbOrig').textContent = r.x === 'gif' ? 'Play GIF' : 'Original';
+  $('#lbOrig').hidden = false;
+  setMsg('#lbMsg', '');
+  const pv = LB.previews.get(r.h);
+  const th = TH.map.get(r.h);
+  setLbImage(pv || th, !pv && !!th);
+  $('#lbSpin').hidden = !!pv;
+  if (!pv) {
+    loadPreview(r).then((u) => {
+      if (LB.r !== r || LB.orig) return;
+      setLbImage(u, false);
+      $('#lbSpin').hidden = true;
+    }, () => {
+      if (LB.r !== r) return;
+      $('#lbSpin').hidden = true;
+      if (r.s <= 15 * 1024 * 1024) showOriginal(); // no server preview: small originals load directly
+      else setMsg('#lbMsg', `No preview stored for this photo. <button data-orig>Load original (${fmtBytes(r.s)})</button>`);
+    });
+  }
+  // Warm neighbours so swiping feels instant.
+  for (const j of [photoIndex(i, 1), photoIndex(i, -1)]) if (j >= 0) loadPreview(S.items[j]).catch(() => {});
+}
+
+function dropOriginal() {
+  if (LB.origUrl && LB.origUrl.startsWith('blob:')) URL.revokeObjectURL(LB.origUrl);
+  LB.orig = null;
+  LB.origUrl = null;
+}
+
+async function showOriginal() {
+  const r = LB.r;
+  if (!r || LB.orig === r) return;
+  LB.orig = r;
+  $('#lbOrig').hidden = true;
+  $('#lbSpin').hidden = false;
+  setMsg('#lbMsg', '');
+  try {
+    let url;
+    if (canStream()) { await registerStream(r); url = streamUrl(r); }
+    else url = await fallbackObjectUrl(r, '#lbMsg');
+    if (LB.r !== r) { if (url.startsWith('blob:')) URL.revokeObjectURL(url); return; }
+    LB.origUrl = url;
+    const probe = new Image();
+    probe.decoding = 'async';
+    probe.onload = () => { if (LB.r === r) { setLbImage(url, false); $('#lbSpin').hidden = true; } };
+    probe.onerror = () => {
+      if (LB.r !== r) return;
+      $('#lbSpin').hidden = true;
+      setMsg('#lbMsg', `This browser can't display .${esc(r.x)} originals. <a href="${esc(megaUrl(r))}" target="_blank" rel="noopener noreferrer">Open in MEGA</a>`);
+    };
+    probe.src = url;
+  } catch (err) {
+    if (LB.r !== r) return;
+    $('#lbSpin').hidden = true;
+    setMsg('#lbMsg', esc(err.message));
+  }
+}
+
+function closeLightbox() {
+  dropOriginal();
+  setLbImage(null);
+  LB.r = null;
+  LB.i = -1;
+}
+
+function lbStep(dir) {
+  const j = photoIndex(LB.i, dir);
+  if (j >= 0) showPhoto(j);
+}
+
+$('#lbPrev').innerHTML = ICON.prev;
+$('#lbNext').innerHTML = ICON.next;
+$('#lbPrev').onclick = (e) => { e.stopPropagation(); lbStep(-1); };
+$('#lbNext').onclick = (e) => { e.stopPropagation(); lbStep(1); };
+$('#lbOrig').onclick = () => showOriginal();
+$('#lbMsg').addEventListener('click', (e) => { if (e.target.closest('[data-orig]')) showOriginal(); });
+
+const stage = $('.lb-stage');
+stage.addEventListener('touchstart', (e) => {
+  LB.swipe = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() } : null;
+}, { passive: true });
+stage.addEventListener('touchend', (e) => {
+  const s = LB.swipe;
+  LB.swipe = null;
+  if (!s || (window.visualViewport && window.visualViewport.scale > 1.02)) return; // pinch-zoomed: let it pan
+  const t = e.changedTouches[0];
+  const dx = t.clientX - s.x, dy = t.clientY - s.y, dt = Date.now() - s.t;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.4) lbStep(dx < 0 ? 1 : -1);
+  else if (dy > 90 && dy > Math.abs(dx) * 1.4) closeOverlay();
+  else if (Math.abs(dx) < 10 && Math.abs(dy) < 10 && dt < 350) $('#lb').classList.toggle('chrome-off');
+}, { passive: true });
+stage.addEventListener('click', () => {
+  if (!('ontouchstart' in window)) $('#lb').classList.toggle('chrome-off'); // touch toggles in touchend
+});
+
+// ---------------------------------------------------------------- video player
+const vid = $('#vid');
+const PL = { r: null, blobUrl: null };
+const BROWSER_VIDEO = new Set(['mp4', 'm4v', 'mov', 'webm', 'mkv', '3gp', 'ogv']);
+
+function openVideo(i) {
+  const r = S.items[i];
+  openOverlay('player');
+  PL.r = r;
+  $('#plName').textContent = r.n;
+  const meta = [fmtBytes(r.s)];
+  if (r.d) meta.push(fmtDur(r.d));
+  if (r.w) meta.push(`${r.w}×${r.hh}`);
+  meta.push(pathOf(r));
+  $('#plMeta').textContent = meta.filter(Boolean).join(' · ');
+  $('#plMega').href = megaUrl(r);
+  vid.poster = LB.previews.get(r.h) || TH.map.get(r.h) || '';
+  setMsg('#plMsg', '');
+  if (!BROWSER_VIDEO.has(r.x)) {
+    setMsg('#plMsg', `.${esc(r.x)} files usually can't play in a browser. <button data-try>Try anyway</button><a href="${esc(megaUrl(r))}" target="_blank" rel="noopener noreferrer">Open in MEGA</a>`);
+    return;
+  }
+  startVideo(r);
+}
+
+async function startVideo(r) {
+  setMsg('#plMsg', '');
+  if (canStream()) {
+    // Set src synchronously inside the tap so iOS allows playback to start.
+    registerStream(r);
+    vid.src = streamUrl(r);
+    vid.play().catch(() => {});
+    return;
+  }
+  try {
+    const u = await fallbackObjectUrl(r, '#plMsg');
+    if (PL.r !== r) { URL.revokeObjectURL(u); return; }
+    PL.blobUrl = u;
+    vid.src = u;
+    vid.play().catch(() => {});
+  } catch (err) {
+    setMsg('#plMsg', esc(err.message));
+  }
+}
+
+function stopVideo() {
+  vid.pause();
+  vid.removeAttribute('src');
+  vid.removeAttribute('poster');
+  vid.load(); // aborts the stream -> the SW cancels its upstream fetch
+  if (PL.blobUrl) { URL.revokeObjectURL(PL.blobUrl); PL.blobUrl = null; }
+  PL.r = null;
+}
+
+vid.addEventListener('error', () => {
+  if (!PL.r || !vid.getAttribute('src')) return;
+  const code = vid.error && vid.error.code;
+  if (code === 4 || code === 3) setMsg('#plMsg', `This browser can't decode this video (${esc(PL.r.x)} / codec). <a href="${esc(megaUrl(PL.r))}" target="_blank" rel="noopener noreferrer">Open in MEGA</a>`);
+  else if (!$('#plMsg').textContent) setMsg('#plMsg', 'Playback stopped (network error).');
+});
+$('#plMsg').addEventListener('click', (e) => { if (e.target.closest('[data-try]') && PL.r) startVideo(PL.r); });
+
+// ================================================================ controls wiring
+$('#btnRefresh').innerHTML = ICON.refresh;
+$('#btnRefresh').onclick = () => {
+  if (!S.links.length) return openLinks();
+  if (S.links.some((L) => L.status === 'loading')) {
+    for (const L of S.links) if (L.job) W.post({ type: 'cancel', job: L.job });
+    toast('Refresh cancelled');
+    return;
+  }
+  refreshAll();
+  toast('Refreshing folder listings…', 2000);
+};
+$('.i-link').outerHTML = ICON.link;
+$('.i-search').outerHTML = ICON.search;
+for (const b of document.querySelectorAll('[data-close]')) b.innerHTML = ICON.close;
+$('#btnLinks').onclick = openLinks;
+
+let qTimer = 0;
+$('#q').addEventListener('input', (e) => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => { saveScroll(); S.view.q = e.target.value; onViewChanged(); }, 180);
+});
+$('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+$('#sort').onchange = (e) => { saveScroll(); S.view.sort = e.target.value; onViewChanged(); };
+$('#mode').onchange = (e) => {
+  const anchor = firstVisibleIndex();
+  S.view.mode = e.target.value;
+  onViewChanged({ restore: false });
+  scrollToIndex(anchor);
+};
+$('#flat').onclick = (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const flat = b.dataset.flat === '1';
+  if (flat === S.view.flat) return;
+  saveScroll();
+  S.view.flat = flat;
+  onViewChanged();
+};
+$('#chips').onclick = (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.dataset.kind === S.view.kind) return;
+  saveScroll();
+  S.view.kind = b.dataset.kind;
+  onViewChanged();
+};
+$('#listHead').onclick = (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const col = b.dataset.col;
+  const cur = S.view.sort;
+  const next = col === 'name' ? (cur === 'name-asc' ? 'name-desc' : 'name-asc')
+    : col === 'size' ? (cur === 'size-desc' ? 'size-asc' : 'size-desc')
+      : (cur === 'date-desc' ? 'date-asc' : 'date-desc');
+  saveScroll();
+  S.view.sort = next;
+  onViewChanged();
+};
+
+function firstVisibleIndex() {
+  return Math.max(0, Math.floor((window.scrollY - G.top) / G.rowH) * G.cols);
+}
+function scrollToIndex(i) {
+  const row = Math.floor(i / G.cols);
+  window.scrollTo(0, row > 0 ? G.top + row * G.rowH - 4 : 0);
+  render(false);
+  requestThumbs();
+}
+
+let resizeTimer = 0;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const anchor = firstVisibleIndex();
+    const oldW = G.w;
+    layout();
+    if (Math.abs(G.w - oldW) > 1) { render(true); scrollToIndex(anchor); } else render(false);
+  }, 120);
+});
+window.addEventListener('scroll', onScroll, { passive: true });
+window.addEventListener('pagehide', saveScroll);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveScroll(); });
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && OV.current) { closeOverlay(); return; }
+  if (OV.current === 'lb') {
+    if (e.key === 'ArrowRight') lbStep(1);
+    if (e.key === 'ArrowLeft') lbStep(-1);
+    return;
+  }
+  if (!OV.current && e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); }
+});
+
+// ================================================================ boot
+async function boot() {
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  loadLinks();
+  const hf = parseHash();
+  S.view.folder = hf || (location.hash ? null : lsGet(LS.folder, null));
+  history.replaceState({ f: S.view.folder }, '', hashFor(S.view.folder));
+  renderHeader();
+  setupServiceWorker();
+  await W.start();
+
+  if (!S.links.length) { S.ready = true; onViewChanged(); openLinks(); return; }
+
+  // 1) Paint immediately from the IndexedDB copy of every listing.
+  let rows = [];
+  try { rows = (await W.call('cached', { cids: S.links.map((L) => L.cid) })).rows; } catch { /* no IDB */ }
+  const now = Date.now();
+  S.links.forEach((L, i) => {
+    const row = rows[i];
+    if (row) { L.status = row.needsKey ? 'needs-key' : 'ok'; indexLink(L, row); }
+  });
+  S.dataVer++;
+  if (S.view.folder) {
+    const L = linkByCid(S.view.folder.cid);
+    if (!L || !L.nodes || !L.nodes.has(S.view.folder.h)) S.view.folder = null;
+  }
+  S.ready = true;
+  onViewChanged({ restore: true });
+
+  // 2) Re-list only what is missing or stale (one API call per link).
+  S.links.forEach((L) => {
+    if (!L.nodes || now - L.at > STALE_MS) listLink(L);
+  });
+  updateProgress();
+}
+
+window.__megaGallery = { S, TH, G, W, BUILD }; // debugging handle (read-only use)
+boot();
+
+})();</script>
+</body>
+</html>
